@@ -60,9 +60,9 @@ std::pair<size_t, size_t> applyTransformation(size_t d, const std::pair<size_t, 
 }
 
 bool validate_linear_dependent_points(const Eigen::Index d, const std::complex<double> omega,
-                                      AbsValMap histogramM, Eigen::MatrixXcd M_p,
-                                      Eigen::MatrixXcd Mprime_p, std::vector<double> sortedKeysM,
-                                      std::pair<size_t, size_t> v,
+                                      const AbsValMap& histogramM, const Eigen::MatrixXcd& M_p,
+                                      const Eigen::MatrixXcd& Mprime_p, const std::vector<double>& sortedKeysM,
+                                      const std::pair<size_t, size_t>& v,
                                       const std::pair<unsigned long, unsigned long>& u,
                                       const size_t k) {
     // Loop over all (p,q) such that f_M(p,q) is nonzero.
@@ -309,27 +309,27 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
             for (size_t pPrime = 0; pPrime < d; pPrime++) {
                 const size_t qPrime = safeMod(v1Inv * (k + pPrime * v.second), d);
 
+                // Recall that f_M(v) = omega^k * f_{M'}(u)
                 const auto [m0, m1] = v;
-                const auto& nonZeroLocationsInMprime = histogramMprime.get(key);
+                const auto [n0, n1] = u;
+                assert(isApproxEqual(M_p(m0, m1), std::pow(omega, k) * Mprime_p(n0, n1)));
 
-                for (const auto& [n0, n1] : nonZeroLocationsInMprime) {
-                    // The solution to S.m = n where
-                    //      S = [[x0, x1], [x2,x3]], m = [[m0],[m1]], n = [[n0], [n1]]
-                    // is x0 = -(m1*x1 - n0)/m0, x2 = -(m1*x3 - n1)/m0, x1 and x3 free
+                // The solution to S.m = n where
+                //      S = [[x0, x1], [x2,x3]], m = [[m0],[m1]], n = [[n0], [n1]]
+                // is x0 = -(m1*x1 - n0)/m0, x2 = -(m1*x3 - n1)/m0, x1 and x3 free
 
-                    const auto m0_inv = fastPowerMod(m0, d - 2, d);
-                    for (size_t x1 = 0; x1 < d; x1++) {
-                        for (size_t x3 = 0; x3 < d; x3++) {
-                            const auto x0 = safeMod(safeMod(n0 - m1 * x1, d) * m0_inv, d);
-                            const auto x2 = safeMod(safeMod(n1 - m1 * x3, d) * m0_inv, d);
+                const auto m0_inv = fastPowerMod(m0, d - 2, d);
+                for (size_t x1 = 0; x1 < d; x1++) {
+                    for (size_t x3 = 0; x3 < d; x3++) {
+                        const auto x0 = safeMod(safeMod(n0 - m1 * x1, d) * m0_inv, d);
+                        const auto x2 = safeMod(safeMod(n1 - m1 * x3, d) * m0_inv, d);
 
-                            if (isSymplecticTransformation(d, x0, x1, x2, x3)) {
-                                Eigen::Matrix2i S;
-                                S << x0, x1, x2, x3;
-                                if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p,
-                                                                     Mprime_p, S)) {
-                                    return true;
-                                }
+                        if (isSymplecticTransformation(d, x0, x1, x2, x3)) {
+                            Eigen::Matrix2i S;
+                            S << x0, x1, x2, x3;
+                            if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p,
+                                                                 Mprime_p, S)) {
+                                return true;
                             }
                         }
                     }

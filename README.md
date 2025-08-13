@@ -1,3 +1,15 @@
+# Initializing
+
+```bash
+$ cmake -DCMAKE_BUILD_TYPE=Release -B cmake-build-release
+```
+
+or
+
+```bash
+$ cmake -DCMAKE_BUILD_TYPE=Debug -B cmake-build-debug
+```
+
 # Running tests
 
 ```bash
@@ -20,6 +32,6 @@ $ ctest
 # Running benchmarks
 
 ```bash
-$ cmake --build cmake-build-debug --target benchmark -j 10
+$ cmake --build cmake-build-release --target benchmark -j 10
 $ cmake-build-debug/benchmark/benchmark
 ```

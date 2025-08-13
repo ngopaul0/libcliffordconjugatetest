@@ -87,6 +87,22 @@ TEST_CASE("single Pauli basis element", "[single]") {
 }
 
 TEST_CASE("multiple Pauli basis elements", "[multiple]") {
+    SECTION("d=11: Linearly dependent M_p") {
+        const int d = 11; // Example dimension
+        const int inv_2 = fastPowerMod(2, d - 2, d);
+        const std::complex<double> omega =
+            std::exp(std::complex<double>(0, 2.0 * pi / d));
+        const Eigen::MatrixXcd Mprime = W(d, 1, 2, inv_2, omega) + W(d, 2, 4, inv_2, omega)
+            + W(d, 3, 6, inv_2, omega) +  W(d, 4, 8, inv_2, omega) +  W(d, 7, 14, inv_2, omega);
+
+        const Eigen::MatrixXcd C = W(d, 3, 4, inv_2, omega) * cliffordPermutationGate(d, 7);
+        const Eigen::MatrixXcd Cstar = C.adjoint();
+        const Eigen::MatrixXcd M = C * Mprime * Cstar;
+        INFO("M = " << M);
+        INFO("Mprime = " << Mprime);
+        REQUIRE(isCliffordConjugate(M, Mprime));
+    }
+
     SECTION("d = 3: Two Pauli basis elements") {
         const int d = 3; // Example dimension
         const int inv_2 = fastPowerMod(2, d - 2, d);
@@ -170,7 +186,7 @@ TEST_CASE("multiple Pauli basis elements", "[multiple]") {
         const Eigen::MatrixXcd M = C * Mprime * Cstar;
 
         INFO("Matrix is " << (M));
-        REQUIRE(isCliffordConjugate(M, Mprime));
+        REQUIRE(isCliffordConjugate(Mprime, M));
     }
 
     SECTION("Brute-force works on linearly dependent M_p") {

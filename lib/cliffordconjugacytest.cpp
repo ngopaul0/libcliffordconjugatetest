@@ -16,15 +16,15 @@ bool isSymplecticTransformation(size_t d, size_t s1, size_t s2, size_t s3, size_
 std::optional<std::pair<double, std::pair<size_t, size_t>>>
 findLinearIndependentCoord(const size_t d, const AbsValMap& histogramM,
                            std::vector<double> sortedKeysM,
-                           const std::pair<size_t, size_t> nonZeroCoord,
-                           bool skipZeroKeys) {
+                           const std::pair<size_t, size_t> nonZeroCoord, bool skipZeroKeys) {
 
     // Given a subset X of Z_d^2, the following holds:
     //      Let (a,b) in X be a nonzero point, (a,b) \neq (0,0).
     //      Then (a,b) is linearly dependent to all points in X iff every point im X is pairwise
     //      linearly dependent.
     // This means it suffices to just loop through all the coordinates once with only one point
-    // used as the check (nonZeroCoord).
+    // used as the check (nonZeroCoord). If we go through all points and find that nonZeroCoord is
+    // linearly dependent to all of them, then we know all points are in a line.
     //
     //      Proof: (=>) Let (a,b) in X be linearly dependent to all points in X.
     //      Take any (x1, x2), (y1, y2) in X. Assume WLOG that (y1, y2) is nonzero.
@@ -59,6 +59,47 @@ std::pair<size_t, size_t> applyTransformation(size_t d, const std::pair<size_t, 
                           (x2 * target.first + x3 * target.second) % d);
 }
 
+bool validate_linear_dependent_points(const Eigen::Index d, const std::complex<double> omega,
+                                      AbsValMap histogramM, Eigen::MatrixXcd M_p,
+                                      Eigen::MatrixXcd Mprime_p, std::vector<double> sortedKeysM,
+                                      std::pair<size_t, size_t> v,
+                                      const std::pair<unsigned long, unsigned long>& u,
+                                      const size_t k) {
+    // Loop over all (p,q) such that f_M(p,q) is nonzero.
+    // To do this, loop over all sorted keys and then access the map in each loop.
+    // This will run at most d - 1 times, because there would be only 1 line in the M_p matrix.
+    // All nonzero points in M_p are pairwise linearly dependent, so tbere's only 1 line of at most
+    // O(d) length
+    for (const auto& keyInner : sortedKeysM) {
+        if (keyInner == 0.0) {
+            continue;
+        }
+        const auto& possibleUInner = histogramM.get(keyInner);
+        for (const auto& [p, q] : possibleUInner) {
+            if (p == 0 && q == 0) {
+                continue;
+            }
+            assert(safeMod(p * v.second - v.first * q, d) == 0);
+
+            // Calculate c where c*v = (p,q), so c = pv1^(-1) and c = qv2^(-1)
+            const size_t c = safeMod(p != 0 ? p * fastPowerMod(v.first, d - 2, d)
+                                            : q * fastPowerMod(v.second, d - 2, d),
+                                     d);
+
+            assert(safeMod(c * v.first, d) == p && safeMod(c * v.second, d) == q);
+
+            const auto& alphaInner = M_p(p, q);
+            // Then S(p,q) = S(c*v) = c*S(v) = c*u
+            const auto& betaInner = Mprime_p(safeMod(c * u.first, d), safeMod(c * u.second, d));
+            const auto omegaPow = std::pow(omega, safeMod(c * k, d));
+            const auto product = omegaPow * betaInner;
+            if (!isApproxEqual(alphaInner, product)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
 bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                          const Eigen::Ref<const Eigen::MatrixXcd>& M_prime) {
     if (M.rows() != M.cols() || M_prime.rows() != M_prime.cols() || M_prime.cols() != M.cols()) {
@@ -168,7 +209,8 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                             // TODO: Optimize this somehow
                             for (size_t pPrime = 0; pPrime < d; pPrime++) {
                                 for (size_t qPrime = 0; qPrime < d; qPrime++) {
-                                    if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p, Mprime_p, S)) {
+                                    if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M,
+                                                                         M_p, Mprime_p, S)) {
                                         return true;
                                     }
                                 }
@@ -187,7 +229,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
     // Sort the keys by the number of coordinates associated with each key.
     auto sortedKeysM = histogramM.sortedKeys();
-    auto sortedKeysMprime = histogramMprime.sortedKeys();
+    // auto sortedKeysMprime = histogramMprime.sortedKeys();
 
     auto it_num = std::ranges::find_if(sortedKeysM,
                                        [](const double key) { return !isApproxEqual(key, 0.0); });
@@ -212,42 +254,81 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     }
     const auto nonZeroCoord = nonZeroCoordOpt.value();
 
-    // Find a linearly dependent pair
-    auto linIndepCoordOpt = findLinearIndependentCoord(d, histogramM, sortedKeysM, nonZeroCoord, false);
+    // Find a linearly dependent pair. If this doesn't yield a value, then every nonzero coordinate
+    // is on a line.
+    auto linIndepCoordOpt =
+        findLinearIndependentCoord(d, histogramM, sortedKeysM, nonZeroCoord, true);
     if (!linIndepCoordOpt.has_value()) {
-        // TODO: Handle this better. skipZeroKeys is currently passed as true in
-        //  findLinearIndependentCoord
-        throw std::invalid_argument("TODO");
+        // If all points are pairwise linearly dependent, then
+        // there exists v such that for any (p,q), (p,q) = c*v for some c
+        // By Lemma 10, we would have f_M(v) = omega^k * f_{M'}(u) for some u. Then S(v) = u, and
+        // k = [v, (p',q')].
+        //
+        // Now, for any nonzero (p,q), f_M(p,q) = omega^[(p,q), (p',q')] f_{M'}(S(p,q)).
+        // Let (p,q) = c*v for some c.
+        // But [(p,q), (p',q')] = [(cv1, cv2), (p', q')]
+        //                     = cv1 * q' - p' * cv2
+        //                     = c(v1q' - p'v2)
+        //                     = c[v, (p',q')]
+        //                     = c * k
+        // Also, S(p,q) = S(cv) = c*S(v) = cu
+        // So it remains to check whether f_M(p,q) = omega^(c*k) * f_{M'}(c*u)
 
-        const double nonZeroKey = histogramM.getNonZeroKey().value_or(0.0);
-        if (nonZeroKey != 0.0) {
-            const auto& nonZeroLocationsInM = histogramM.get(nonZeroKey);
-            const auto& nonZeroLocationsInMprime = histogramMprime.get(nonZeroKey);
+        const auto& key = sortedKeysM[0];
+        std::pair<size_t, size_t> v = histogramM.get(key).front();
 
-            const auto [m0, m1] = nonZeroLocationsInM.front();
+        // alpha_v = f_M(v)
+        const auto alpha = M_p(v.first, v.second);
+        assert(alpha.real() != 0.0 && alpha.imag() != 0.0);
+        // The size of this is at most O(d), because if all nonzero entries have linearly dependent
+        // coordinates, then all the coordinates are in a line. A line can have at most O(d) points
+        // in Z_d^2.
+        const auto& possibleU = histogramMprime.get(key);
 
+        // TODO: Refactor
+        for (const auto& u : possibleU) {
+            // For each beta_u with the same absolute value
+            const auto beta = Mprime_p(u.first, u.second);
+            // Try to find integer k such that alpha_u = omega^k beta_v
+            const double kTest = checkPhase(d, alpha, beta);
+            const size_t k = std::round(kTest);
+            if (std::abs(kTest - k) > 1e-5) {
+                continue;
+            }
 
-            for (const auto& [n0, n1] : nonZeroLocationsInMprime) {
-                // The solution to S.m = n where
-                //      S = [[x0, x1], [x2,x3]], m = [[m0],[m1]], n = [[n0], [n1]]
-                // is x0 = -(m1*x1 - n0)/m0, x2 = -(m1*x3 - n1)/m0, x1 and x3 free
+            // k is the prospective value of the symplectic product [v, (p',q')]
+            // O(d) to run this
+            if (!validate_linear_dependent_points(d, omega, histogramM, M_p, Mprime_p, sortedKeysM,
+                                                  v, u, k)) {
+                continue;
+            }
 
-                const auto m0_inv = fastPowerMod(m0, d - 2, d);
-                for (size_t x1 = 0; x1 < d; x1++) {
-                    for (size_t x3 = 0; x3 < d; x3++) {
-                        const auto x0 = safeMod(safeMod(n0 - m1 * x1, d) * m0_inv, d);
-                        const auto x2 = safeMod(safeMod(n1 - m1 * x3, d) * m0_inv, d);
+            // We know k = [v, (p',q')] = v1q' - p'v2
+            // So v1q' = k + p'v2, hence q' = v1^{-1}(k + p'v2)
+            const size_t v1Inv = fastPowerMod(v.first, d - 2, d);
+            for (size_t pPrime = 0; pPrime < d; pPrime++) {
+                const size_t qPrime = safeMod(v1Inv * (k + pPrime * v.second), d);
 
-                        if (isSymplecticTransformation(d, x0, x1, x2, x3)) {
-                            Eigen::Matrix2i S;
-                            S << x0, x1, x2, x3;
+                const auto [m0, m1] = v;
+                const auto& nonZeroLocationsInMprime = histogramMprime.get(key);
 
-                            // TODO: Optimize this somehow
-                            for (size_t pPrime = 0; pPrime < d; pPrime++) {
-                                for (size_t qPrime = 0; qPrime < d; qPrime++) {
-                                    if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p, Mprime_p, S)) {
-                                        return true;
-                                    }
+                for (const auto& [n0, n1] : nonZeroLocationsInMprime) {
+                    // The solution to S.m = n where
+                    //      S = [[x0, x1], [x2,x3]], m = [[m0],[m1]], n = [[n0], [n1]]
+                    // is x0 = -(m1*x1 - n0)/m0, x2 = -(m1*x3 - n1)/m0, x1 and x3 free
+
+                    const auto m0_inv = fastPowerMod(m0, d - 2, d);
+                    for (size_t x1 = 0; x1 < d; x1++) {
+                        for (size_t x3 = 0; x3 < d; x3++) {
+                            const auto x0 = safeMod(safeMod(n0 - m1 * x1, d) * m0_inv, d);
+                            const auto x2 = safeMod(safeMod(n1 - m1 * x3, d) * m0_inv, d);
+
+                            if (isSymplecticTransformation(d, x0, x1, x2, x3)) {
+                                Eigen::Matrix2i S;
+                                S << x0, x1, x2, x3;
+                                if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p,
+                                                                     Mprime_p, S)) {
+                                    return true;
                                 }
                             }
                         }

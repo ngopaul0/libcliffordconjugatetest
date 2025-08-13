@@ -1,0 +1,219 @@
+#include "catch2/catch_test_macros.hpp"
+#include "internal/util.h"
+
+#include <cmath>
+#include <complex>
+#include <iostream>
+#include <random>
+#include <vector>
+
+#include "catch2/matchers/catch_matchers.hpp"
+#include "catch2/matchers/catch_matchers_floating_point.hpp"
+
+using namespace cliffconjtest;
+
+TEST_CASE("check_phase", "[check_phase]") {
+    SECTION("Works on random cases") {
+        const size_t d = 7;
+        const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));
+
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<> dis(-9.0, 9.0);
+        std::uniform_int_distribution<> randIntegers(0, d - 1);
+
+        const size_t iterations = 5000;
+        for (size_t i = 0; i < iterations; i++) {
+            const auto v2 = std::complex(dis(gen), dis(gen));
+            const auto k = randIntegers(gen);
+            const auto omegaPow = std::pow(omega, k);
+            const auto v1 = omegaPow * v2;
+            INFO("i = " << i << ", v1 = " << v1 << ", v2 = " << v2 << ", k = " << k);
+            REQUIRE_THAT(checkPhase(d, v1, v2), Catch::Matchers::WithinAbs(k, 1e-5));
+            REQUIRE_THAT(checkPhase(d, v2, v1), Catch::Matchers::WithinAbs((d - k) % d, 1e-5));
+        }
+    }
+}
+
+// A helper function to create a random complex-valued matrix.
+Eigen::MatrixXcd create_random_matrix(int d) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> dis(-9.0, 9.0);
+
+    Eigen::MatrixXcd matrix(d, d);
+    for (int i = 0; i < d; ++i) {
+        for (int j = 0; j < d; ++j) {
+            matrix(i, j) = std::complex(dis(gen), dis(gen));
+        }
+    }
+    return matrix;
+}
+
+TEST_CASE("W function", "[W]") {
+    const size_t d = 7;
+    const int inv_2 = fastPowerMod(2, d - 2, d);
+
+    const std::complex<double> omega =
+        std::exp(std::complex<double>(0, 2.0 * pi / d));
+
+    SECTION("W(0,0) is identity") {
+        const size_t dHere = 3;
+        const int inv_2Here = fastPowerMod(2, d - 2, dHere);
+        const std::complex<double> omegaHere =
+            std::exp(std::complex<double>(0, 2.0 * pi / dHere));
+
+        const auto result = W(dHere, 0, 0, inv_2Here, omegaHere);
+
+        CHECK(result.isIdentity());
+    }
+
+    SECTION("Correct for predetermined result") {
+        const size_t dHere = 3;
+        const int inv_2Here = fastPowerMod(2, d - 2, dHere);
+        const auto omegaHere = std::exp(std::complex<double>(0, 2.0 * pi / dHere));
+        const Eigen::MatrixXcd result = W(dHere, 2, 1, inv_2Here, omegaHere);
+        Eigen::Matrix3cd actual;
+        actual << std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(-0.5, -0.866025),
+                  std::complex<double>(-0.5, 0.866025), std::complex<double>(0, 0),          std::complex<double>(0, 0),
+                  std::complex<double>(0, 0),           std::complex<double>(1, 0),          std::complex<double>(0, 0);
+        INFO(result << " vs " << actual);
+        for (size_t i = 0; i < result.rows(); ++i) {
+            for (size_t j = 0; j < result.cols(); ++j) {
+                CHECK_THAT(result(i, j).imag(), Catch::Matchers::WithinAbs(actual(i, j).imag(), 1e-5));
+                CHECK_THAT(result(i, j).real(), Catch::Matchers::WithinAbs(actual(i,j).real(), 1e-5));
+            }
+        }
+
+    }
+
+    SECTION("Commutation relations") {
+        for (size_t i = 0; i < d; i++) {
+            for (size_t j = 0; j < d; j++) {
+                for (size_t iPrime = 0; iPrime < d; iPrime++) {
+                    for (size_t jPrime = 0; jPrime < d; jPrime++) {
+                        const Eigen::MatrixXcd left = W(d, i, j, inv_2, omega) * W(d, iPrime, jPrime, inv_2, omega);
+                        const Eigen::MatrixXcd right = W(d, iPrime, jPrime, inv_2, omega) * W(d, i, j, inv_2, omega);
+
+                        const auto omegaPow =
+                            std::pow(omega, symplecticProduct(d, i, j, iPrime, jPrime));
+                        for (size_t row = 0; row < d; row++) {
+                            for (size_t col = 0; col < d; col++) {
+                                REQUIRE(isApproxEqual(left(row, col), omegaPow * right(row, col)));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+std::complex<double> fNaive(
+    const Eigen::Ref<const Eigen::MatrixXcd>& M,
+    int p,
+    int q,
+    int inv_2,
+    const std::complex<double>& omega) {
+
+    if (M.rows() != M.cols()) {
+        throw std::invalid_argument("Dimension mismatch");
+    }
+    if (M.rows() == 0) {
+        throw std::invalid_argument("Zero matrix");
+    }
+    const auto d = M.rows();
+
+    const Eigen::MatrixXcd W_matrix = W(d, -p, -q, inv_2, omega);
+    const Eigen::MatrixXcd WtimesM = W_matrix * M;
+    const auto tr = WtimesM.trace();
+
+    return std::complex(1.0 / d, 0.0) * tr;
+}
+
+TEST_CASE("f function", "[f]") {
+
+    const int d = 3; // Example dimension
+    const int inv_2 = fastPowerMod(2, d - 2, d);
+
+    const std::complex<double> omega =
+        std::exp(std::complex<double>(0, 2.0 * pi / d));
+
+    SECTION("f works on predetermined result") {
+        CHECK((2 * inv_2) % d == 1);
+        Eigen::Matrix3cd U;
+        U << std::complex(-5.57693, -0.765222), std::complex(6.22008, -8.91947),  std::complex(-0.637812, 0.571667),
+             std::complex(-0.0336533, -1.70245), std::complex(7.87921, 3.40459),   std::complex(-5.09563, -1.66903),
+             std::complex(-8.89951, 2.14251),    std::complex(0.366395, 0.542691), std::complex(-0.816918, 4.0729);
+        auto naiveResult = fNaive(U, 0, 0, inv_2, omega);
+        CHECK_THAT(naiveResult.real(), Catch::Matchers::WithinAbs(0.4951206666, 1e-5));
+        CHECK_THAT(naiveResult.imag(), Catch::Matchers::WithinAbs(2.23742266, 1e-5));
+
+        auto optimizedResult = f(U, 0, 0, inv_2, omega);
+        CHECK_THAT(optimizedResult.real(), Catch::Matchers::WithinAbs(0.4951206666, 1e-5));
+        CHECK_THAT(optimizedResult.imag(), Catch::Matchers::WithinAbs(2.23742266, 1e-5));
+    }
+
+    SECTION("Optimized f equivalent to naive approach") {
+
+        size_t num_iterations = 500;
+        for (size_t i = 0; i < num_iterations; ++i) {
+            auto U = create_random_matrix(d);
+            for (int p = 0; p < d; ++p) {
+                for (int q = 0; q < d; ++q) {
+
+                    INFO("Iteration " << i << " p " << p << " q " << q << ", U = " << U);
+                    REQUIRE_THAT(fNaive(U, p, q, inv_2, omega).imag(), Catch::Matchers::WithinAbs(f(U, p, q, inv_2, omega).imag(), 1e-9));
+                    REQUIRE_THAT(fNaive(U, p, q, inv_2, omega).real(), Catch::Matchers::WithinAbs(f(U, p, q, inv_2, omega).real(), 1e-9));
+                }
+            }
+
+        }
+    }
+
+    SECTION("Lemma 1 should hold") {
+        size_t num_iterations = 500;
+        for (size_t i = 0; i < num_iterations; ++i) {
+            // Generate random matrices U and V
+            auto U = create_random_matrix(d);
+            auto V = create_random_matrix(d);
+
+            // Pre-calculate the matrix product UV
+            auto UV = U * V;
+            // Loop through all possible p, q pairs and check the identities
+            for (int p = 0; p < d; ++p) {
+                for (int q = 0; q < d; ++q) {
+                    std::complex<double> sumTemp7 = 0.0;
+                    std::complex<double> sumTemp8 = 0.0;
+
+                    // The left side of the identity check
+                    std::complex<double> lhs = f(UV, p, q, inv_2, omega);
+
+                    // Loops for Equation 7 and 8
+                    for (int i = 0; i < d; ++i) {
+                        for (int j = 0; j < d; ++j) {
+
+                            // Omega term for Equation 7
+                            int omega_exponent_7 = safeMod(inv_2 * (q * i - p * j), d);
+                            std::complex<double> omega_term_7 = std::pow(omega, static_cast<double>(omega_exponent_7));
+
+                            // Equation 7 sum
+                            sumTemp7 += omega_term_7 * f(U, i, j, inv_2, omega) * f(V, p - i, q - j, inv_2, omega);
+
+                            // Omega term for Equation 8
+                            int omega_exponent_8 = safeMod(-inv_2 * (q * i - p * j), d);
+                            std::complex<double> omega_term_8 = std::pow(omega, static_cast<double>(omega_exponent_8));
+
+                            // Equation 8 sum
+                            sumTemp8 += omega_term_8 * f(U, p - i, q - j, inv_2, omega) * f(V, i, j, inv_2, omega);
+                        }
+                    }
+
+                    REQUIRE(isApproxEqual(lhs, sumTemp7));
+
+                    REQUIRE(isApproxEqual(lhs, sumTemp8));
+                }
+            }
+        }
+    }
+}

@@ -35,6 +35,9 @@ struct AbsValMap {
 
   public:
     explicit AbsValMap(size_t precision) : precision_(precision) {};
+    explicit AbsValMap(size_t precision, int mapReservation) : precision_(precision) {
+        map_.reserve(mapReservation);
+    };
 
     /** Inserts the entry (p,q) and returns the key used */
     double insertEntry(size_t p, size_t q, const std::complex<double>& value) {

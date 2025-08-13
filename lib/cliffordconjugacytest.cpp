@@ -149,7 +149,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     }
 
     // Now check whether the histogram for M' is equal. If not, then the two
-    AbsValMap histogramMprime(5);
+    AbsValMap histogramMprime(5, histogramM.size());
     Eigen::MatrixXcd Mprime_p = Eigen::MatrixXcd::Zero(d, d);
     for (size_t p = 0; p < d; p++) {
         for (size_t q = 0; q < d; q++) {

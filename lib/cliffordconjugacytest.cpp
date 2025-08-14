@@ -220,7 +220,6 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
         }
     }
 
-    const bool atLeastTwoNonZero = histogramM.getCount(0.0) <= d * d - 2;
     // Handle some edge cases
     if (histogramM.size() == 0) {
         return false;
@@ -235,52 +234,6 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
         // TODO: Maybe analyze the omegas somehow
         return bruteForceTestCliffordConjugacy(M, M_prime, omega, M_p, Mprime_p);
-    } else if (histogramM.size() == 2) {
-        // If there is exactly 1 nonzero entry in Mp
-        const double nonZeroKey = histogramM.getNonZeroKey().value_or(0.0);
-        if (nonZeroKey != 0.0) {
-            const auto& nonZeroLocationsInM = histogramM.get(nonZeroKey);
-            const auto& nonZeroLocationsInMprime = histogramMprime.get(nonZeroKey);
-            // If there is only a single non-zero value (i.e. M is one of the Pauli basis elements
-            // W(p,q))
-            if (nonZeroLocationsInM.size() == 1 && nonZeroLocationsInMprime.size() == 1) {
-                const auto [m0, m1] = nonZeroLocationsInM.front();
-                // Histogram for M' should be the same.
-                const auto [n0, n1] = nonZeroLocationsInMprime.front();
-                // The solution to S.m = n where
-                //      S = [[x0, x1], [x2,x3]], m = [[m0],[m1]], n = [[n0], [n1]]
-                // is x0 = -(m1*x1 - n0)/m0, x2 = -(m1*x3 - n1)/m0, x1 and x3 free
-
-                const auto m0_inv = fastPowerMod(m0, d - 2, d);
-
-                for (size_t x1 = 0; x1 < d; x1++) {
-                    for (size_t x3 = 0; x3 < d; x3++) {
-                        const auto x0 = safeMod(safeMod(n0 - m1 * x1, d) * m0_inv, d);
-                        const auto x2 = safeMod(safeMod(n1 - m1 * x3, d) * m0_inv, d);
-
-                        if (isSymplecticTransformation(d, x0, x1, x2, x3)) {
-                            Eigen::Matrix2i S;
-                            S << x0, x1, x2, x3;
-
-                            // TODO: Optimize this somehow
-                            for (size_t pPrime = 0; pPrime < d; pPrime++) {
-                                for (size_t qPrime = 0; qPrime < d; qPrime++) {
-                                    if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M,
-                                                                         M_p, Mprime_p, S)) {
-                                        return true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                return false;
-            }
-        }
-    }
-
-    if (!atLeastTwoNonZero) {
-        throw std::invalid_argument("TODO: Handle case where there is only 1 nonzero ");
     }
 
     // Sort the keys by the number of coordinates associated with each key.

@@ -8,7 +8,7 @@ namespace cliffconjtest {
 /**
  * Given two square dxd matrices, where d is an odd prime, checks whether M and M_prime are
  * Clifford-conjugate, i.e. whether there exists a 1-qudit Clifford gate C in C_2 (normaliser of the
- * group of Pauli gates C_1) such that M = C*M*C^*.
+ * group of Pauli gates C_1) such that M = CM'C^*.
  *
  * The algorithm used is based on Lemma 10 from [1], which states
  *

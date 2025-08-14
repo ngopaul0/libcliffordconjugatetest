@@ -148,7 +148,8 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
         return true;
     }
 
-    // Now check whether the histogram for M' is equal. If not, then the two
+    // Now check whether the histogram for M' is equal. If not, then the two don't have the same
+    // entry values.
     AbsValMap histogramMprime(5, histogramM.size());
     Eigen::MatrixXcd Mprime_p = Eigen::MatrixXcd::Zero(d, d);
     for (size_t p = 0; p < d; p++) {
@@ -175,7 +176,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
         }
 
         // At this point, Mp is just a single value in every entry. We cannot determine a
-        // permutation reliably. Fall back to brute force (O(d^7) runtime).
+        // permutation reliably. Fall back to brute force (worst case O(d^7) runtime).
 
         // TODO: Maybe analyze the omegas somehow
         return bruteForceTestCliffordConjugacy(M, M_prime, omega, M_p, Mprime_p);
@@ -284,7 +285,6 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
         // coordinates, then all the coordinates are in a line. A line can have at most O(d) points
         // in Z_d^2.
         const auto& possibleU = histogramMprime.get(key);
-
         // TODO: Refactor
         for (const auto& u : possibleU) {
             // For each beta_u with the same absolute value
@@ -297,7 +297,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
             }
 
             // k is the prospective value of the symplectic product [v, (p',q')]
-            // O(d) to run this
+            // Worst case O(d) to run this (returning true requires going through all O(d) entries)
             if (!validate_linear_dependent_points(d, omega, histogramM, M_p, Mprime_p, sortedKeysM,
                                                   v, u, k)) {
                 continue;
@@ -427,7 +427,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                 // Via Lemma 10, we must have
                 //      alpha_v = omega^k beta_v = omega^[(p,q),(p',q')] beta_v
                 // and this gives us a linear (congruence) equation k = [v,(p',q')].
-                // Similarly, k' = [v',(p',q')]. As v and v' are known, this is a system of 2
+                // Similarly, k' = [v',(p',q')]. As k, k', v and v' are known, this is a system of 2
                 // equations in 2 unknowns p' and q'
 
                 // inverseToUse := (v[1] * vPrime[2] - v[2]*vPrime[1])&^(-1) mod d;
@@ -441,7 +441,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                     safeMod(inverseToUse * (k * vPrime.second - kPrime * v.second), d);
 
                 // Verify this works for all p, q
-                // This check is O(d^2), but it will exit quickly if it finds a bad value.
+                // Check is worst-case O(d^2), but it will exit quickly if it finds a bad value
                 if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p, Mprime_p, S)) {
                     return true;
                 }

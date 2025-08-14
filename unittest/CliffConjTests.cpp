@@ -84,6 +84,25 @@ TEST_CASE("single Pauli basis element", "[single]") {
 
         REQUIRE(isCliffordConjugate(M, Mprime));
     }
+
+    SECTION("Algorithm works on non-example single Pauli basis element") {
+        const int d = 3; // Example dimension
+        const int inv_2 = fastPowerMod(2, d - 2, d);
+        const std::complex<double> omega =
+            std::exp(std::complex<double>(0, 2.0 * pi / d));
+        const Eigen::MatrixXcd M = W(d, 1, 2, inv_2, omega);
+
+        const Eigen::MatrixXcd C = cliffordPermutationGate(d, 2);
+        const Eigen::MatrixXcd Cstar = C.adjoint();
+        const Eigen::MatrixXcd Mprime = C * (2 * M) * Cstar;
+
+        INFO("Matrix is " << (M));
+
+        const auto M_p = createMpMatrix((M), omega, inv_2);
+        const auto Mprime_p = createMpMatrix((Mprime), omega, inv_2);
+
+        REQUIRE(!isCliffordConjugate(M, Mprime));
+    }
 }
 
 TEST_CASE("multiple Pauli basis elements", "[multiple]") {
@@ -159,7 +178,86 @@ TEST_CASE("multiple Pauli basis elements", "[multiple]") {
         REQUIRE(isCliffordConjugate(M, Mprime));
     }
 
-    SECTION("Algorithm works on linearly dependent M_p") {
+    SECTION("d = 5: Non-example, two linearly dependent Pauli basis elements bypassing histogram check") {
+        // This will actually pass the histogram check.
+
+        const int d = 5; // Example dimension
+        const int inv_2 = fastPowerMod(2, d - 2, d);
+        const std::complex<double> omega =
+            std::exp(std::complex<double>(0, 2.0 * pi / d));
+        Eigen::Vector2i v1(1,2), v2(2,4), v3(3,1);
+
+        const Eigen::MatrixXcd Mprime = W(d, v1(0), v1(1), inv_2, omega) + W(d, v2(0), v2(1), inv_2, omega)
+            + 2*W(d, v3(0), v3(1), inv_2, omega);
+
+        const Eigen::MatrixXcd C = cliffordPermutationGate(d, 2) * makeX(d, 2);
+        const Eigen::MatrixXcd Cstar = C.adjoint();
+
+        Eigen::Matrix2i nonSymplecticTransform;
+        nonSymplecticTransform << 2, 0, 0, 2;
+        // This asserts it's not symplectic
+        REQUIRE(safeMod(nonSymplecticTransform.determinant(), d) != 1);
+
+        // Permute the basis element coordinates by a nonsymplectic transformation. Keep the
+        // coefficients the same to bypass the histogram check.
+        Eigen::Vector2i w1 = nonSymplecticTransform * v1;
+        Eigen::Vector2i w2 = nonSymplecticTransform * v2;
+        Eigen::Vector2i w3 = nonSymplecticTransform * v3;
+
+        const Eigen::MatrixXcd M = 2*W(d, w1(0), w1(1), inv_2, omega) + W(d, w2(0), w2(1), inv_2, omega)
+            + W(d, w3(0), w3(1), inv_2, omega);
+
+        // Ensure the trace check is bypassed.
+        REQUIRE_THAT(Mprime.trace().imag(),  Catch::Matchers::WithinAbs(M.trace().imag(), 1e-5));
+        REQUIRE_THAT(Mprime.trace().real(),  Catch::Matchers::WithinAbs(M.trace().real(), 1e-5));
+
+        const auto M_p = createMpMatrix((M), omega, inv_2);
+        const auto Mprime_p = createMpMatrix((Mprime), omega, inv_2);
+        CHECK(!bruteForceTestCliffordConjugacy(M, Mprime, omega, M_p, Mprime_p));
+
+        INFO("Matrix is " << (M));
+        REQUIRE(!isCliffordConjugate(M, Mprime));
+    }
+
+    SECTION("d = 5: Non-example, two Pauli basis elements bypassing histogram check") {
+        // This will actually pass the histogram check.
+
+        const int d = 5; // Example dimension
+        const int inv_2 = fastPowerMod(2, d - 2, d);
+        const std::complex<double> omega =
+            std::exp(std::complex<double>(0, 2.0 * pi / d));
+        Eigen::Vector2i v1(1,2), v2(2,2);
+
+        const Eigen::MatrixXcd Mprime = 2*W(d, v1(0), v1(1), inv_2, omega) + 3*W(d, v2(0), v2(1), inv_2, omega);
+
+        const Eigen::MatrixXcd C = cliffordPermutationGate(d, 2) * makeX(d, 2);
+        const Eigen::MatrixXcd Cstar = C.adjoint();
+
+        Eigen::Matrix2i nonSymplecticTransform;
+        nonSymplecticTransform << 2, 0, 0, 2;
+        // This asserts it's not symplectic
+        REQUIRE(safeMod(nonSymplecticTransform.determinant(), d) != 1);
+
+        // Permute the basis element coordinates by a nonsymplectic transformation. Keep the
+        // coefficients the same to bypass the histogram check.
+        Eigen::Vector2i w1 = nonSymplecticTransform * v1;
+        Eigen::Vector2i w2 = nonSymplecticTransform * v2;
+
+        const Eigen::MatrixXcd M = 2*W(d, w1(0), w1(1), inv_2, omega) + 3*W(d, w2(0), w2(1), inv_2, omega);
+
+        // Ensure the trace check is bypassed.
+        REQUIRE_THAT(Mprime.trace().imag(),  Catch::Matchers::WithinAbs(M.trace().imag(), 1e-5));
+        REQUIRE_THAT(Mprime.trace().real(),  Catch::Matchers::WithinAbs(M.trace().real(), 1e-5));
+
+        const auto M_p = createMpMatrix((M), omega, inv_2);
+        const auto Mprime_p = createMpMatrix((Mprime), omega, inv_2);
+        CHECK(!bruteForceTestCliffordConjugacy(M, Mprime, omega, M_p, Mprime_p));
+
+        INFO("Matrix is " << (M));
+        REQUIRE(!isCliffordConjugate(M, Mprime));
+    }
+
+    SECTION("d = 3, Linearly dependent M_p") {
         const int d = 3; // Example dimension
         const int inv_2 = fastPowerMod(2, d - 2, d);
         const std::complex<double> omega =
@@ -189,7 +287,7 @@ TEST_CASE("multiple Pauli basis elements", "[multiple]") {
         REQUIRE(isCliffordConjugate(Mprime, M));
     }
 
-    SECTION("Brute-force works on linearly dependent M_p") {
+    SECTION("d=5: Brute-force works on linearly dependent M_p") {
         // d = 3 and M' = W(1,2) + W(2,1) and cliffordPermutationGate(d, 2) results in nonunique
         // symplectic transforms
         const int d = 5; // Example dimension

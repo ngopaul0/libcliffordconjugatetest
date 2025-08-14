@@ -39,6 +39,10 @@ struct AbsValMap {
         map_.reserve(mapReservation);
     };
 
+    const auto& getMap() const {
+        return map_;
+    }
+
     /** Inserts the entry (p,q) and returns the key used */
     double insertEntry(size_t p, size_t q, const std::complex<double>& value) {
         auto key = roundKey(std::abs(value));

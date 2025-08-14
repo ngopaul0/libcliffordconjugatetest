@@ -33,6 +33,7 @@ TEST_CASE("Brute force Clifford-conjugate test", "[benchmark][bruteforce]") {
                     FAIL("Expected to be not Clifford conjugate");;
                 }
             }
+            return true;
         });
     };
 

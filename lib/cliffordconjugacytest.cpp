@@ -59,23 +59,57 @@ std::pair<size_t, size_t> applyTransformation(size_t d, const std::pair<size_t, 
                           (x2 * target.first + x3 * target.second) % d);
 }
 
-bool validate_linear_dependent_points(const Eigen::Index d, const std::complex<double> omega,
+/**
+ * @brief This function will check whether the given vectors v and u are mappings of each other
+ * according to Lemma 10. More precisely, it'll validate a necessary condition for u = S(v) to hold.
+ *
+ * Assuming that the only nonzero entries in M_p have coordinates that are all in a line (all
+ * pairwise linearly dependent), validates whether the equations from Lemma 10,
+ *
+ *      f_M(v) = omega^k * f_{M'}(u) and u = S(v),
+ *
+ * are satisfied for the given v and u.
+ *
+ * @param d Prime modulus (odd prime)
+ * @param omega dth root of unity
+ * @param histogramM Mapping of absolute values of M_p
+ * @param M_p Precomputed f_M(p,q) values
+ * @param Mprime_p Precomputed f_{M'}(p,q) values
+ * @param sortedKeysM Keys of histogramM that are sorted by number of coordinates that have that key
+ * @param v The selected vector which is linearly dependent to all coordinates with nonzero entries
+ * in M_p
+ * @param u The vector u which emits a necessary condition v = S(u) by Lemma 10.
+ * @param k Exponent on omega. For Lemma 10, we want this to be [v, (p',q')]
+ * @return Whether f_M(v) = omega^k * f_{M'}(u) is satisfied
+ */
+bool validateLinearDependentPoints(const Eigen::Index d, const std::complex<double>& omega,
                                       const AbsValMap& histogramM, const Eigen::MatrixXcd& M_p,
                                       const Eigen::MatrixXcd& Mprime_p, const std::vector<double>& sortedKeysM,
                                       const std::pair<size_t, size_t>& v,
                                       const std::pair<unsigned long, unsigned long>& u,
                                       const size_t k) {
+    // Testing f_M(v) = omega^k * f_{M'}(u) is trivial. But testing u = S(v) requires more work.
+    //
+    // From f_M(v) = omega^k * f_{M'}(u), by Lemma 10, we want k = [v, (p',q')].
+    //
     // Loop over all (p,q) such that f_M(p,q) is nonzero.
-    // To do this, loop over all sorted keys and then access the map in each loop.
-    // This will run at most d - 1 times, because there would be only 1 line in the M_p matrix.
-    // All nonzero points in M_p are pairwise linearly dependent, so tbere's only 1 line of at most
-    // O(d) length
-    for (const auto& keyInner : sortedKeysM) {
-        if (keyInner == 0.0) {
+    // Validates that f_M((p,q)) = omega^[(p,q), (p',q')] * f_{M'}(S(p,q)) holds for all nonzero
+    // (p,q), using the assumption that u = S(v) and c*v = (p,q) for some c. If u = S(v) holds, then
+    // a necessary condition would be that
+    //
+    //      f_M((p,q)) = omega^[(p,q), (p',q')] * f_{M'}(S(p,q))
+    //                 = omega^[c*v, (p',q')] * f_{M'}(S(c*v))
+    //                 = omega^(c*[v, (p',q')]) * f_{M'}(c*S(v))
+    //                 = omega^(c*k) * f_{M'}(c*u)
+    //
+    // To do this, loop over all sorted keys and then access the map in nested loop.
+    // The overall iterations for the nested loops is O(d), because all nonzero points in M_p are
+    // pairwise linearly dependent, so tbere's only 1 line of at most O(d) length
+    for (const auto& absVal : sortedKeysM) {
+        if (absVal == 0.0) {
             continue;
         }
-        const auto& possibleUInner = histogramM.get(keyInner);
-        for (const auto& [p, q] : possibleUInner) {
+        for (const auto& [p, q] : histogramM.get(absVal)) {
             if (p == 0 && q == 0) {
                 continue;
             }
@@ -85,19 +119,29 @@ bool validate_linear_dependent_points(const Eigen::Index d, const std::complex<d
             const size_t c = safeMod(p != 0 ? p * fastPowerMod(v.first, d - 2, d)
                                             : q * fastPowerMod(v.second, d - 2, d),
                                      d);
-
             assert(safeMod(c * v.first, d) == p && safeMod(c * v.second, d) == q);
 
-            const auto& alphaInner = M_p(p, q);
-            // Then S(p,q) = S(c*v) = c*S(v) = c*u
-            const auto& betaInner = Mprime_p(safeMod(c * u.first, d), safeMod(c * u.second, d));
+            // alpha is f_M(p,q)
+            const auto& alpha = M_p(p, q);
+            // beta is f_{M'}(S(p,q)), but by Lemma 10, we would need S(p,q) = S(c*v) = c*S(v) = c*u
+            const auto& beta = Mprime_p(safeMod(c * u.first, d), safeMod(c * u.second, d));
+            // By Lemma 10, the power of omega is
+            //     [(p,q), (p',q')] = [(cv1, cv2), (p', q')]
+            //                      = cv1 * q' - p' * cv2
+            //                      = c(v1q' - p'v2)
+            //                      = c * [v, (p',q')]
+            //                      = c * k
             const auto omegaPow = std::pow(omega, safeMod(c * k, d));
-            const auto product = omegaPow * betaInner;
-            if (!isApproxEqual(alphaInner, product)) {
+            const auto product = omegaPow * beta;
+            if (!isApproxEqual(alpha, product)) {
                 return false;
             }
         }
     }
+    // Here we've successfully validated the necessary condition
+    // f_M((p,q)) = omega^(c*k) * f_{M'}(c*u) for all nonzero (p,q) such that f_M((p,q)) != 0.
+    // This is not(?) a sufficient condition for Lemma 10; we still need to recover p', q' and S
+    // itself.
     return true;
 }
 bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
@@ -148,8 +192,8 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
         return true;
     }
 
-    // Now check whether the histogram for M' is equal. If not, then the two don't have the same
-    // entry values.
+    // Now construct a mapping for M' while also checking if the histogram for M' is equal to the
+    // one for M. If not, then the two don't have the same entry values.
     AbsValMap histogramMprime(5, histogramM.size());
     Eigen::MatrixXcd Mprime_p = Eigen::MatrixXcd::Zero(d, d);
     for (size_t p = 0; p < d; p++) {
@@ -162,6 +206,17 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
             if (histogramMprime.getCount(mapKey) > histogramM.getCount(mapKey)) {
                 return false;
             }
+        }
+    }
+
+    if (histogramM.size() != histogramMprime.size()) {
+        return false;
+    }
+    // Worst case: Every entry in M_p and M_prime is unique, and this results in O(d^2) absolute
+    // values to check.
+    for (const auto& key : histogramMprime.getMap() | std::views::keys) {
+        if (histogramMprime.getCount(key) != histogramM.getCount(key)) {
+            return false;
         }
     }
 
@@ -289,7 +344,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
         for (const auto& u : possibleU) {
             // For each beta_u with the same absolute value
             const auto beta = Mprime_p(u.first, u.second);
-            // Try to find integer k such that alpha_u = omega^k beta_v
+            // Try to find integer k such that alpha_v = omega^k beta_u
             const double kTest = checkPhase(d, alpha, beta);
             const size_t k = std::round(kTest);
             if (std::abs(kTest - k) > 1e-5) {
@@ -297,8 +352,9 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
             }
 
             // k is the prospective value of the symplectic product [v, (p',q')]
+            // This will test whether f_M(v) = omega^k * f_{M'}(u) and u = S(v) are satisfied.
             // Worst case O(d) to run this (returning true requires going through all O(d) entries)
-            if (!validate_linear_dependent_points(d, omega, histogramM, M_p, Mprime_p, sortedKeysM,
+            if (!validateLinearDependentPoints(d, omega, histogramM, M_p, Mprime_p, sortedKeysM,
                                                   v, u, k)) {
                 continue;
             }
@@ -348,6 +404,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     const auto vPrime = linIndepCoord;
 
     // Choose u and u' so that the frequencies histogramM(|u|) and histogramM(|u'|) are minimized.
+    // sortedKeysM is sorted for this in increasing order, so just iterate from start.
     auto uKey = sortedKeysM[0];
     std::pair<size_t, size_t> u = histogramM.get(uKey).front();
     auto uIndep = findLinearIndependentCoord(d, histogramM, sortedKeysM, u, false);

@@ -117,8 +117,8 @@ bool validateNecessaryCondFromLinDepPoints(const Eigen::Index d, const std::comp
             assert(safeMod(p * v.second - v.first * q, d) == 0);
 
             // Calculate c where c*v = (p,q), so c = pv1^(-1) and c = qv2^(-1)
-            const size_t c = safeMod(p != 0 ? p * fastPowerMod(v.first, d - 2, d)
-                                            : q * fastPowerMod(v.second, d - 2, d),
+            const size_t c = safeMod(p != 0 ? p * modInverse(v.first, d)
+                                            : q * modInverse(v.second, d),
                                      d);
             assert(safeMod(c * v.first, d) == p && safeMod(c * v.second, d) == q);
 
@@ -158,7 +158,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
     // earlier assert guarantees M.rows() == M.cols()
     const auto d = M.rows();
-    const auto inv2 = fastPowerMod(2, d - 2, d);
+    const auto inv2 = modInverse(2, d);
     const auto omega = std::exp(std::complex<double>(0, 2 * pi / d));
 
     // Via Lemma 10, if M and M' are Clifford-conjugate, then
@@ -320,7 +320,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
             // We know k = [v, (p',q')] = v1q' - p'v2
             // So v1q' = k + p'v2, hence q' = v1^{-1}(k + p'v2)
-            const size_t v1Inv = fastPowerMod(v.first, d - 2, d);
+            const size_t v1Inv = modInverse(v.first, d);
             for (size_t pPrime = 0; pPrime < d; pPrime++) {
                 const size_t qPrime = safeMod(v1Inv * (k + pPrime * v.second), d);
 
@@ -333,7 +333,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                 //      S = [[x0, x1], [x2,x3]], m = [[m0],[m1]], n = [[n0], [n1]]
                 // is x0 = -(m1*x1 - n0)/m0, x2 = -(m1*x3 - n1)/m0, x1 and x3 free
 
-                const auto m0_inv = fastPowerMod(m0, d - 2, d);
+                const auto m0_inv = modInverse(m0, d);
                 for (size_t x1 = 0; x1 < d; x1++) {
                     for (size_t x3 = 0; x3 < d; x3++) {
                         const auto x0 = safeMod(safeMod(n0 - m1 * x1, d) * m0_inv, d);
@@ -395,7 +395,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
             const auto uPrimeDeterminant =
                 safeMod(u.first * uPrime.second - uPrime.first * u.second, d);
-            const auto uPrimeDetInverse = fastPowerMod(uPrimeDeterminant, d - 2, d);
+            const auto uPrimeDetInverse = modInverse(uPrimeDeterminant, d);
             // uUprimeDeterminantInv := (u[1]*uPrime[2] - uPrime[1]*u[2]) &^(-1) mod d
 
             // Scoord[1] := (uMap[1] * uPrime[2] - u[2] * uPrimeMap[1])*uUprimeDeterminantInv mod d;
@@ -446,8 +446,8 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                 // inverseToUse := (v[1] * vPrime[2] - v[2]*vPrime[1])&^(-1) mod d;
                 // pPrimeFromThis := (possibleK*vPrime[1] - possibleKPrime*v[1])*inverseToUse mod d;
                 // qPrimeFromThis := (possibleK*vPrime[2] - possibleKPrime*v[2])*inverseToUse mod d;
-                const auto inverseToUse = fastPowerMod(
-                    safeMod(v.first * vPrime.second - v.second * vPrime.first, d), d - 2, d);
+                const auto inverseToUse = modInverse(
+                    safeMod(v.first * vPrime.second - v.second * vPrime.first, d), d);
                 const auto pPrime =
                     safeMod(inverseToUse * (k * vPrime.first - kPrime * v.first), d);
                 const auto qPrime =

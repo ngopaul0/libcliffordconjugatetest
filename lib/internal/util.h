@@ -96,9 +96,9 @@ inline long long fastPowerMod(unsigned long long base, unsigned long long expone
 
 // A helper function to perform modulo arithmetic that correctly handles
 // negative numbers, which is a common pitfall with C++'s % operator.
-inline int safeMod(int val, int modulus) { return (val % modulus + modulus) % modulus; }
+inline long safeMod(const long val, const long modulus) { return (val % modulus + modulus) % modulus; }
 
-inline size_t modInverse(const int base, const size_t p) {
+inline long modInverse(const long base, const size_t p) {
     // Fermat's little hteorem / Euler's theorem: a^(p-1) = 1 (mod p), so a^(p-2) = a^(-1) (mod p)
     return fastPowerMod(safeMod(base, p), p - 2, p);
 }

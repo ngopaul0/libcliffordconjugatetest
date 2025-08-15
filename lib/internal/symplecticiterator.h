@@ -76,9 +76,7 @@ class Sp1ZdMatrixIterator {
         return {modulus_, modulus_ + 1};
     }
 
-    void reset() {
-        current_tuple_ = {0, 0, 0};
-    }
+    void reset() { current_tuple_ = {0, 0, 0}; }
 
     // --- Operators ---
 
@@ -190,7 +188,8 @@ class Sp1ZdMatrixIterator {
 
         Eigen::Matrix2i result = firstMatrix * secondMatrix * thirdMatrix;
 
-        result = result.array().unaryExpr([&](const int x) { return safeMod(x, modulus_); });
+        result = result.array().unaryExpr(
+            [&](const int x) { return static_cast<int>(safeMod(x, modulus_)); });
         current_matrix_ = result;
     }
 };

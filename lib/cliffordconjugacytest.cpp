@@ -82,12 +82,13 @@ std::pair<size_t, size_t> applyTransformation(size_t d, const std::pair<size_t, 
  * @param k Exponent on omega. For Lemma 10, we want this to be [v, (p',q')]
  * @return Whether f_M(v) = omega^k * f_{M'}(u) is satisfied
  */
-bool validateLinearDependentPoints(const Eigen::Index d, const std::complex<double>& omega,
-                                      const AbsValMap& histogramM, const Eigen::MatrixXcd& M_p,
-                                      const Eigen::MatrixXcd& Mprime_p, const std::vector<double>& sortedKeysM,
-                                      const std::pair<size_t, size_t>& v,
-                                      const std::pair<unsigned long, unsigned long>& u,
-                                      const size_t k) {
+bool validateNecessaryCondFromLinDepPoints(const Eigen::Index d, const std::complex<double>& omega,
+                                           const AbsValMap& histogramM, const Eigen::MatrixXcd& M_p,
+                                           const Eigen::MatrixXcd& Mprime_p,
+                                           const std::vector<double>& sortedKeysM,
+                                           const std::pair<size_t, size_t>& v,
+                                           const std::pair<unsigned long, unsigned long>& u,
+                                           const size_t k) {
     // Testing f_M(v) = omega^k * f_{M'}(u) is trivial. But testing u = S(v) requires more work.
     //
     // From f_M(v) = omega^k * f_{M'}(u), by Lemma 10, we want k = [v, (p',q')].
@@ -238,19 +239,22 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
     // Sort the keys by the number of coordinates associated with each key.
     auto sortedKeysM = histogramM.sortedKeys();
-    // auto sortedKeysMprime = histogramMprime.sortedKeys();
 
-    auto it_num = std::ranges::find_if(sortedKeysM,
-                                       [](const double key) { return !isApproxEqual(key, 0.0); });
-    if (it_num == sortedKeysM.end()) {
-        throw std::invalid_argument("TODO: Missing nonzero coordinate");
+    double firstNonZeroKey = 0.0;
+    for (const double& key : sortedKeysM) {
+        if (key != 0.0) {
+            firstNonZeroKey = key;
+            break;
+        }
+    }
+    if (firstNonZeroKey == 0.0) {
+        // Should never reach this point: histogramM.size() >= 2 here, so there must be nonzero key
+        throw std::invalid_argument("Missing nonzero coordinate");
     }
 
-    // Find a non-zero key so that the key itself is nonzero and it has a nonzero coordinate.
-    const auto nonZeroKey = *it_num;
     std::optional<std::pair<size_t, size_t>> nonZeroCoordOpt = std::nullopt;
     {
-        const auto coords = histogramM.get(nonZeroKey);
+        const auto coords = histogramM.get(firstNonZeroKey);
         for (const auto& coord : coords) {
             if (coord.first != 0 || coord.second != 0) {
                 nonZeroCoordOpt = std::make_optional(coord);
@@ -281,9 +285,11 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
         //                     = c[v, (p',q')]
         //                     = c * k
         // Also, S(p,q) = S(cv) = c*S(v) = cu
-        // So it remains to check whether f_M(p,q) = omega^(c*k) * f_{M'}(c*u)
+        // So it remains to check whether f_M(p,q) = omega^(c*k) * f_{M'}(c*u) as a necessary
+        // condition
 
-        const auto& key = sortedKeysM[0];
+        // Pick a v with the least frequency
+        const auto& key = firstNonZeroKey;
         std::pair<size_t, size_t> v = histogramM.get(key).front();
 
         // alpha_v = f_M(v)
@@ -305,10 +311,10 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
             }
 
             // k is the prospective value of the symplectic product [v, (p',q')]
-            // This will test whether f_M(v) = omega^k * f_{M'}(u) and u = S(v) are satisfied.
+            // This will test whether f_M(v) = omega^k * f_{M'}(u) and u = S(v) can be satisfied.
             // Worst case O(d) to run this (returning true requires going through all O(d) entries)
-            if (!validateLinearDependentPoints(d, omega, histogramM, M_p, Mprime_p, sortedKeysM,
-                                                  v, u, k)) {
+            if (!validateNecessaryCondFromLinDepPoints(d, omega, histogramM, M_p, Mprime_p,
+                                                       sortedKeysM, v, u, k)) {
                 continue;
             }
 
@@ -351,7 +357,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     const auto linIndepCoord = linIndepCoordOpt.value().second;
 
     // v and v' are linearly independent
-    const auto vKey = nonZeroKey;
+    const auto vKey = firstNonZeroKey;
     const auto v = nonZeroCoord;
     const auto vPrimeKey = linIndepKey;
     const auto vPrime = linIndepCoord;
@@ -406,9 +412,6 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                 uPrimeDetInverse * (u.first * uPrimeMap.second - uMap.second * uPrime.first), d);
 
             if (isSymplecticTransformation(d, x0, x1, x2, x3)) {
-                Eigen::Matrix2i S;
-                S << x0, x1, x2, x3;
-
                 // Let alpha_v = f_M(v) and beta_v = f_{M'}(v)
                 const auto alphaV = M_p(v.first, v.second);
                 const auto alphaVPrime = M_p(vPrime.first, vPrime.second);
@@ -450,6 +453,8 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                 const auto qPrime =
                     safeMod(inverseToUse * (k * vPrime.second - kPrime * v.second), d);
 
+                Eigen::Matrix2i S;
+                S << x0, x1, x2, x3;
                 // Verify this works for all p, q
                 // Check is worst-case O(d^2), but it will exit quickly if it finds a bad value
                 if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p, Mprime_p, S)) {

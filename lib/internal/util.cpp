@@ -29,10 +29,6 @@ std::string matrix_to_string(const Eigen::Ref<const Eigen::MatrixXcd>& M) {
     return ss.str();
 }
 
-size_t symplecticProduct(size_t d, int p, int q, int pPrime, int qPrime) {
-    return safeMod(p * qPrime - pPrime * q, d);
-}
-
 Eigen::MatrixXcd makeZ(int d, int exponent) {
     Eigen::MatrixXcd Z = Eigen::MatrixXcd::Zero(d, d);
     for (int i = 0; i < d; i++) {

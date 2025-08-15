@@ -94,11 +94,18 @@ inline long long fastPowerMod(unsigned long long base, unsigned long long expone
     return result;
 }
 
-size_t symplecticProduct(size_t d, int p, int q, int pPrime, int qPrime);
-
 // A helper function to perform modulo arithmetic that correctly handles
 // negative numbers, which is a common pitfall with C++'s % operator.
 inline int safeMod(int val, int modulus) { return (val % modulus + modulus) % modulus; }
+
+inline size_t modInverse(const int base, const size_t p) {
+    // Fermat's little hteorem / Euler's theorem: a^(p-1) = 1 (mod p), so a^(p-2) = a^(-1) (mod p)
+    return fastPowerMod(safeMod(base, p), p - 2, p);
+}
+
+inline size_t symplecticProduct(size_t d, int p, int q, int pPrime, int qPrime) {
+    return safeMod(p * qPrime - pPrime * q, d);
+}
 
 /**
  * @brief Creates the Pauli Z gate acting on a single qudit, with exponent
@@ -161,6 +168,101 @@ Eigen::MatrixXcd W(long d, int p, int q, int inv_2, const std::complex<double>& 
  */
 std::complex<double> f(const Eigen::Ref<const Eigen::MatrixXcd>& M, int p, int q, int inv_2,
                        const std::complex<double>& omega);
+
+/**
+ * Reduces the matrix A (over Z_p) to REF and returns the rank of A
+ * @tparam MatrixType An Eigen integer matrix type like Matrix2i or MatrixXi
+ * @param A The matrix over Z_p to reduce to row echelon form (REF). Matrix will be modified.
+ * @param p The prime modulus
+ * @param shouldReduce Whether do
+ * @return The rank of A
+ */
+template <typename MatrixType>
+size_t reduceToREFAndGetRank(MatrixType& A, const int p, bool shouldReduce = false) {
+    auto rows = A.rows();
+    auto cols = A.cols();
+
+    size_t rank = 0;
+    int pivotRow = 0;
+    int pivotCol = 0;
+    while (pivotRow < rows && pivotCol < cols) {
+        // Find a non-zero pivot
+        int iMax = pivotRow;
+        while (iMax < rows && A(iMax, pivotCol) == 0) {
+            iMax++;
+        }
+
+        if (iMax == rows) {
+            // No pivot found in this column, move to next column
+            pivotCol++;
+            continue;
+        }
+
+        // Swap rows to bring the pivot to the current position
+        if (pivotRow != iMax) {
+            A.row(pivotRow).swap(A.row(iMax));
+        }
+
+        // Normalize the pivot row
+        size_t inv_pivot = modInverse(A(pivotRow, pivotCol), p);
+        for (int j = pivotCol; j < cols; j++) {
+            A(pivotRow, j) = safeMod(A(pivotRow, j) * inv_pivot, p);
+        }
+
+        // Zero out everything below (pivotRow, pivotColumn) via row operations
+        for (int i = pivotRow + 1; i < rows; i++) {
+            if (i != pivotRow) {
+                long long factor = A(i, pivotCol);
+                for (int j = pivotCol; j < cols; j++) {
+                    long long subtractTerm = factor * A(pivotRow, j) % p;
+                    A(i, j) = safeMod(A(i, j) - subtractTerm, p);
+                }
+            }
+        }
+
+        pivotRow++;
+        pivotCol++;
+        rank++;
+    }
+
+    if (shouldReduce) {
+        pivotRow = rows - 1;
+        pivotCol = cols - 1;
+        while (pivotRow >= 0 && pivotCol >= 0) {
+            // Find first non-zero entry
+            int jMin = 0;
+            while (jMin <= pivotCol && A(pivotRow, jMin) == 0) {
+                jMin++;
+            }
+
+            if (jMin > pivotCol) {
+                // No pivot found in this row, move to next row
+                pivotRow--;
+                continue;
+            }
+            pivotCol = jMin;
+
+            if (A(pivotRow, pivotCol) != 1) {
+                auto theValue = A(pivotRow, pivotCol);
+                throw std::out_of_range("cannot reduce: not in row echelon form");
+            }
+
+            // Zero out everything above (pivotRow, pivotColumn) via row operations
+            for (int i = 0; i < pivotRow; i++) {
+
+                long long factor = A(i, pivotCol); // divided by A(pivotRow, pivotCol)
+                for (int j = pivotCol; j < cols; j++) {
+                    long long subtractTerm = safeMod(factor * A(pivotRow, j), p);
+                    A(i, j) = safeMod(A(i, j) - subtractTerm, p);
+                }
+            }
+
+            pivotRow--;
+        }
+    }
+
+    return rank;
+}
 
 } // namespace cliffconjtest
 

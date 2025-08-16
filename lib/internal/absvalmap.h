@@ -22,8 +22,8 @@
 struct AbsValMap {
   private:
     size_t precision_;
-    std::unordered_map<std::double_t, std::list<std::pair<size_t, size_t>>> map_;
-    static const std::list<std::pair<size_t, size_t>> EMPTY_PAIR_LIST;
+    std::unordered_map<std::double_t, std::vector<std::pair<size_t, size_t>>> map_;
+    static const std::vector<std::pair<size_t, size_t>> EMPTY_PAIR_LIST;
 
     double roundKey(double key) const {
         if (precision_ < 0) {
@@ -34,12 +34,15 @@ struct AbsValMap {
     }
 
   public:
-    explicit AbsValMap(size_t precision) : precision_(precision) {};
+    explicit AbsValMap(size_t precision = 5) : precision_(precision) {};
     explicit AbsValMap(size_t precision, int mapReservation) : precision_(precision) {
         map_.reserve(mapReservation);
     };
 
     const auto& getMap() const {
+        return map_;
+    }
+    auto& getMap() {
         return map_;
     }
 
@@ -50,7 +53,7 @@ struct AbsValMap {
         return key;
     }
 
-    const std::list<std::pair<size_t, size_t>>& get(const double key) const {
+    const std::vector<std::pair<size_t, size_t>>& get(const double key) const {
         const auto it = map_.find(roundKey(key));
         return it != map_.end() ? it->second : EMPTY_PAIR_LIST;
     }

@@ -13,7 +13,7 @@ using namespace cliffconjtest;
 TEST_CASE("TupleIterator", "[tupleiterator]") {
     SECTION("Iterates correctly over all elements of Z_3^4 with UseVariableModuli = false") {
         std::vector<std::vector<size_t>> allValues;
-        for (const auto& tuple : TupleIterator<false>(3, 4)) {
+        for (const auto& tuple : TupleIterator<SingleModulus>(3, 4)) {
             allValues.push_back(tuple);
         }
 
@@ -34,7 +34,7 @@ TEST_CASE("TupleIterator", "[tupleiterator]") {
 
     SECTION("Iterates correctly over all elements of Z_3^4 with UseVariableModuli = true") {
         std::vector<std::vector<size_t>> allValues;
-        for (const auto& tuple : TupleIterator<true>({3, 3, 3, 3})) {
+        for (const auto& tuple : TupleIterator<VariableModuli>({3, 3, 3, 3})) {
             allValues.push_back(tuple);
         }
 
@@ -53,9 +53,29 @@ TEST_CASE("TupleIterator", "[tupleiterator]") {
         }
     }
 
+    SECTION("Use-after-free: locally scoped moduli arg with VariableModuliRef") {
+        // The vector {3, 3, 3, 3} gets deallocated immediately after. This is a use-after-free.
+        auto it = TupleIterator<__VariableModuliRef>({3, 3, 3, 3});
+        CHECK_THROWS_AS(it.begin(), std::length_error);
+    }
+
+    SECTION("Use-after-free: locally scoped iterator") {
+        // The TupleIterator gets deallocated immediately after. This is a use-after-free
+        auto it = TupleIterator<VariableModuli>({3, 3, 3, 3}).begin();
+        CHECK_THROWS_AS(it.begin(), std::length_error);
+    }
+
+    SECTION("Use-after-free: dynamically allocated iterator") {
+        auto *baseIterator = new TupleIterator<VariableModuli>({3, 3, 3, 3});
+        auto it = baseIterator->begin();
+        delete baseIterator;
+        // std::bad_alloc
+        CHECK_THROWS(it.begin());
+    }
+
     SECTION(
         "Iterates correctly over all elements of Z_3 x Z_2 x Z_5 with UseVariableModuli = true") {
-        auto iterator = TupleIterator<true>({3, 2, 5});
+        auto iterator = TupleIterator<VariableModuli>({3, 2, 5});
         size_t index = 0;
         for (size_t a = 0; a < 3; a++) {
             for (size_t b = 0; b < 2; b++) {

@@ -229,3 +229,13 @@ TEST_CASE("MultiDimensionalArray Const Correctness", "[MultiDimensionalArray]") 
         REQUIRE_THAT(values, Catch::Matchers::Equals(std::vector{1, 2, 3, 4}));
     }
 }
+
+TEST_CASE("MultiDimensionalArray use-after-free", "[MultiDimensionalArray]") {
+    SECTION("use-after-free from index iterator") {
+        auto *arr = new MultiDimensionalArray<int, true>({2, 2});
+        auto it = arr->indexIterator();
+        delete arr;
+        // thanks C++!
+        CHECK_THROWS(it.begin());
+    }
+}

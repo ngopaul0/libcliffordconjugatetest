@@ -30,7 +30,7 @@ struct OptionalArrayField<false> {
 /**
  * A class for multidimensional arrays, where each dimension can have a variable size.
  * @tparam T The type to store
- * @tparam UseVariableDimension Whether the dimensions of the array are different.
+ * @tparam UseVariableDimension Whether each coordinate in the array can have a different dimension.
  */
 template <typename T, bool UseVariableDimension>
 class MultiDimensionalArray : OptionalArrayField<UseVariableDimension> {
@@ -202,13 +202,14 @@ class MultiDimensionalArray : OptionalArrayField<UseVariableDimension> {
     [[nodiscard]] size_t size() const { return data.size(); }
 
     template <bool B = UseVariableDimension, typename = std::enable_if_t<B>>
-    [[nodiscard]] TupleIterator<true> indexIterator() const {
-        return TupleIterator<true>(this->dimensions_);
+    [[nodiscard]] TupleIterator<__VariableModuliRef> indexIterator() const {
+        // Iterate over a reference
+        return TupleIterator<__VariableModuliRef>(this->dimensions_);
     }
 
     template <bool B = UseVariableDimension, typename = std::enable_if_t<!B>>
-    [[nodiscard]] TupleIterator<false> indexIterator() const {
-        return TupleIterator<false>(this->dimensionPerCoordinate_, this->numCoordinatePlaces_);
+    [[nodiscard]] TupleIterator<SingleModulus> indexIterator() const {
+        return TupleIterator<SingleModulus>(this->dimensionPerCoordinate_, this->numCoordinatePlaces_);
     }
 };
 

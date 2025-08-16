@@ -6,18 +6,36 @@
 
 namespace cliffconjtest {
 
-template <bool UseVariableModuli>
-struct OptionalField {
+enum ModuliType {
+    VariableModuli,
+    SingleModulus,
+    __VariableModuliRef,
+};
+
+template <ModuliType ModuliType>
+struct OptionalField;
+
+template <>
+struct OptionalField<__VariableModuliRef> {
+    // Only defined when UseVariableModuli == true
+    const std::vector<size_t>& moduli_;
+};
+
+template <>
+struct OptionalField<VariableModuli> {
     // Only defined when UseVariableModuli == true
     const std::vector<size_t> moduli_;
 };
 
 template <>
-struct OptionalField<false> {
+struct OptionalField<SingleModulus> {
     // Only defined when UseVariableModuli == false
     const size_t modulus_;
     const size_t dimensions_;
 };
+
+template <ModuliType ModuliType>
+constexpr bool isVariableModuli = ModuliType == __VariableModuliRef || ModuliType == VariableModuli;
 
 /**
  * @class TupleIterator
@@ -71,13 +89,17 @@ struct OptionalField<false> {
  * for each position. The last dimension (rightmost) increments first, and when it reaches its
  * limit, it "rolls over" and increments the next dimension to the left.
  *
- * @tparam UseVariableModuli Whether to use a variable modulus for each coordinate (e.g. for
+ * @tparam Type Whether to use a variable modulus for each coordinate (e.g. for
  * tuples in Z_2 x Z_3 x Z_4) or to use a single modulus for each coordinate (e.g. for Z_3^3).
- * Using false will ensure that the vector of moduli is not allocated when it's known that the
- * modulus is the same for all coordinates.
+ * Using ModuliType::SingleModulus will ensure that the vector of moduli is not allocated when it's
+ * known that the modulus is the same for all coordinates.
+ * Using ModuliType::VariableModuli will allow for different moduli for different coordinates, but
+ * it will create a copy of the given moduli vector. ModuliType::VariableModuliRef will avoid the
+ * copy, but the caller will be responsible for ensuring the moduli vector is kept in scope with
+ * the iterator. Rust would've been a better option with its lifetimes management.
  */
-template <bool UseVariableModuli>
-class TupleIterator : OptionalField<UseVariableModuli> {
+template <ModuliType Type>
+class TupleIterator : OptionalField<Type> {
   public:
     // Required iterator type aliases for C++17 and later
     using iterator_category = std::forward_iterator_tag;
@@ -86,56 +108,27 @@ class TupleIterator : OptionalField<UseVariableModuli> {
     using pointer = value_type*;
     using reference = value_type&;
 
-    /**
-     * @brief Constructs tuple iterator for variable moduli.
-     * Used if UseVariableModuli == true
-     * @param moduli Vector of moduli. This vector must not be empty. Warning: This will copy the
-     * moduli array.
-     */
-    template <bool B = UseVariableModuli, typename = std::enable_if_t<B>>
-    explicit TupleIterator(const std::vector<size_t>& moduli)
-        : OptionalField<UseVariableModuli>{moduli}, current_tuple_(moduli.size(), 0) {
+    // Using SFINAE (Substitution Failure Is Not An Error) to conditionally remove constructors
+    // at compile time.
+    // isVariableModuli<T> being true would resolve std::enable_if_t into an int. The int value
+    // itself doesn't matter at all.
+    // isVariableModuli<T> being false would result in compiler removing this constructor (SFINAE)
+    // The = 0 is just a way to set a default value for the dummy parameter
+    template <ModuliType T = Type, std::enable_if_t<isVariableModuli<T>, int> = 0>
+    explicit TupleIterator(const std::vector<size_t>& moduli, bool is_end = false)
+        : OptionalField<Type>{moduli}, current_tuple_(moduli.size(), 0), is_end_(is_end) {
 
         if (this->moduli_.empty()) {
             // An empty dimensions vector means there is nothing to iterate over.
             is_end_ = true;
         } else {
-            // Check for any zero dimensions, which would result in an empty iteration.
-            for (const size_t dim : this->moduli_) {
-                if (dim == 0) {
-                    is_end_ = true;
-                    break;
-                }
-            }
+            // Could check for any zero dimensions, which would result in an empty iteration.
         }
     }
 
-    /**
-     * @brief Constructs tuple iterator for Z_modulus^dimensions.
-     * Used if UseVariableModuli == false
-     */
-    template <bool B = UseVariableModuli, typename = std::enable_if_t<!B>>
-    TupleIterator(const size_t modulus, const size_t dimensions)
-        : OptionalField<UseVariableModuli>{modulus, dimensions}, current_tuple_(dimensions, 0) {}
-
-  private:
-    /**
-     * @brief Constructs tuple iterator for variable moduli.
-     * Used if UseVariableModuli == true
-     * @param moduli Vector of moduli. This vector must not be empty.
-     */
-    template <bool B = UseVariableModuli, typename = std::enable_if_t<B>>
-    TupleIterator(const std::vector<size_t>& moduli, bool is_end)
-        : OptionalField<UseVariableModuli>{moduli}, current_tuple_(moduli.size(), 0),
-          is_end_(is_end) {}
-
-    /**
-     * @brief Constructs tuple iterator for Z_modulus^dimensions.
-     * Used if UseVariableModuli == false
-     */
-    template <bool B = UseVariableModuli, typename = std::enable_if_t<!B>>
-    TupleIterator(const size_t modulus, const size_t dimensions, bool is_end)
-        : OptionalField<UseVariableModuli>{modulus, dimensions}, current_tuple_(dimensions, 0),
+    template <ModuliType T = Type, std::enable_if_t<!isVariableModuli<T>, int> = 0>
+    TupleIterator(const size_t modulus, const size_t dimensions, bool is_end = false)
+        : OptionalField<Type>{modulus, dimensions}, current_tuple_(dimensions, 0),
           is_end_(is_end) {}
 
   public:
@@ -167,7 +160,7 @@ class TupleIterator : OptionalField<UseVariableModuli> {
 
         // Start from the last dimension and decrement
         size_t i;
-        if constexpr (UseVariableModuli) {
+        if constexpr (isVariableModuli<Type>) {
             i = this->moduli_.size();
         } else {
             i = this->dimensions_;
@@ -182,7 +175,7 @@ class TupleIterator : OptionalField<UseVariableModuli> {
             // e.g. the example should be incremented from (0, 0, 2) to (0, 0, 3). But we're in Z_3,
             // so the limit of 3 is reached.
             size_t modulus;
-            if constexpr (UseVariableModuli) {
+            if constexpr (isVariableModuli<Type>) {
                 modulus = this->moduli_[i];
             } else {
                 modulus = this->modulus_;
@@ -228,7 +221,7 @@ class TupleIterator : OptionalField<UseVariableModuli> {
             return true;
         }
 
-        if constexpr (UseVariableModuli) {
+        if constexpr (isVariableModuli<Type>) {
             return this->moduli_ == other.moduli_ && current_tuple_ == other.current_tuple_ &&
                    is_end_ == other.is_end_;
         } else {
@@ -244,20 +237,29 @@ class TupleIterator : OptionalField<UseVariableModuli> {
      */
     bool operator!=(const TupleIterator& other) const { return !(*this == other); }
 
-    [[nodiscard]] TupleIterator begin() const {
-        if constexpr (UseVariableModuli) {
-            return TupleIterator(this->moduli_);
-        } else {
-            return TupleIterator(this->modulus_, this->dimensions_);
-        }
+    template <ModuliType T = Type, std::enable_if_t<T == __VariableModuliRef, int> = 0>
+    [[nodiscard]] TupleIterator<__VariableModuliRef> begin() const {
+        return TupleIterator<__VariableModuliRef>(this->moduli_);
     }
 
-    [[nodiscard]] TupleIterator end() const {
-        if constexpr (UseVariableModuli) {
-            return TupleIterator(this->moduli_, true);
-        } else {
-            return TupleIterator(this->modulus_, this->dimensions_, true);
-        }
+    template <ModuliType T = Type, std::enable_if_t<T == VariableModuli, int> = 0>
+    [[nodiscard]] TupleIterator<__VariableModuliRef> begin() const {
+        return TupleIterator<__VariableModuliRef>(this->moduli_);
+    }
+
+    template <ModuliType T = Type, std::enable_if_t<!isVariableModuli<T>, int> = 0>
+    [[nodiscard]] TupleIterator<SingleModulus> begin() const {
+        return TupleIterator(this->modulus_, this->dimensions_);
+    }
+
+    template <ModuliType T = Type, std::enable_if_t<isVariableModuli<T>, int> = 0>
+    [[nodiscard]] TupleIterator<__VariableModuliRef> end() const {
+        return TupleIterator<__VariableModuliRef>(this->moduli_, true);
+    }
+
+    template <ModuliType T = Type, std::enable_if_t<!isVariableModuli<T>, int> = 0>
+    [[nodiscard]] TupleIterator<SingleModulus> end() const {
+        return TupleIterator(this->modulus_, this->dimensions_, true);
     }
 
   private:

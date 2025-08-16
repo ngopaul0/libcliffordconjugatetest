@@ -244,7 +244,7 @@ size_t reduceToREFAndGetRank(MatrixType& A, const int p, bool shouldReduce = fal
 
             if (A(pivotRow, pivotCol) != 1) {
                 auto theValue = A(pivotRow, pivotCol);
-                throw std::out_of_range("cannot reduce: not in row echelon form");
+                throw std::out_of_range("assertion failed: cannot reduce: not in row echelon form");
             }
 
             // Zero out everything above (pivotRow, pivotColumn) via row operations

@@ -8,6 +8,8 @@
 #include "catch2/matchers/catch_matchers.hpp"
 #include "internal/tupleiterator.h"
 
+using namespace cliffconjtest;
+
 TEST_CASE("TupleIterator", "[tupleiterator]") {
     SECTION("Iterates correctly over all elements of Z_3^4 with UseVariableModuli = false") {
         std::vector<std::vector<size_t>> allValues;

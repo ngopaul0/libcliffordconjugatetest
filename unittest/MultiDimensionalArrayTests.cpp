@@ -9,7 +9,9 @@
 
 #include "catch2/matchers/catch_matchers.hpp"
 #include "catch2/matchers/catch_matchers_vector.hpp"
-#include "internal/MultiDimensionalArray.h"
+#include "internal/multidimarray.h"
+
+using namespace cliffconjtest;
 
 struct SomeData {
     size_t a{};

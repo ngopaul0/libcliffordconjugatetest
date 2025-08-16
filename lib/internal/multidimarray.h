@@ -8,15 +8,16 @@
 
 #include "tupleiterator.h"
 
+namespace cliffconjtest {
 /**
  * A class for multidimensional arrays, where each dimension can have a variable size.
  * @tparam T The type to store
  */
 template <typename T>
 class MultiDimensionalArray {
-  public:
+public:
     class iterator {
-      public:
+    public:
         // Required iterator type aliases for C++17 and later
         using iterator_category = std::random_access_iterator_tag;
         using value_type = T;
@@ -85,11 +86,11 @@ class MultiDimensionalArray {
         bool operator<=(const iterator& other) const { return !(*this > other); }
         bool operator>=(const iterator& other) const { return !(*this < other); }
 
-      private:
+    private:
         pointer ptr_;
     };
 
-  private:
+private:
     std::vector<T> data{};
     std::vector<size_t> dims;
 
@@ -119,7 +120,7 @@ class MultiDimensionalArray {
         return index;
     }
 
-  public:
+public:
     explicit MultiDimensionalArray(const std::vector<size_t>& dimensions) : dims(dimensions) {
         size_t totalElements = std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<>());
         data.resize(totalElements);
@@ -150,5 +151,7 @@ class MultiDimensionalArray {
         return TupleIterator<true>(dims);
     }
 };
+
+}
 
 #endif // MULTIDIMENSIONALARRAY_H

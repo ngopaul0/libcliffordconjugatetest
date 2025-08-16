@@ -11,4 +11,9 @@ add_library(cliffordconjugatetest STATIC cliffordconjugacytest.cpp cliffordconju
         internal/multidimarray.h
         internal/tupleiterator.h
 )
-target_link_libraries(cliffordconjugatetest PRIVATE Eigen3::Eigen)
+target_link_libraries(cliffordconjugatetest PUBLIC Eigen3::Eigen)
+find_package(OpenMP)
+if(OpenMP_FOUND)
+    message(STATUS "Linking OpenMP")
+    target_link_libraries(cliffordconjugatetest PUBLIC OpenMP::OpenMP_CXX)
+endif()

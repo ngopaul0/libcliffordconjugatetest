@@ -83,20 +83,43 @@ BruteForceReturnType<IsReturningInfo> bruteForceTestCliffordConjugacy(
     }
 
     if (gates.has_value()) {
+        bool found = false;
+        std::optional<std::pair<Eigen::Matrix2i, std::pair<size_t, size_t>>> result;
+        omp_lock_t found_lock;
+        omp_init_lock(&found_lock);
+
+        #pragma omp parallel for collapse(2) shared(found, result) schedule(dynamic)
         for (size_t pPrime = 0; pPrime < d; pPrime++) {
             for (size_t qPrime = 0; qPrime < d; qPrime++) {
+                if (found) {
+                    continue;
+                }
                 for (const auto& gate : gates->get().getGates()) {
+                    if (found) {
+                        break;
+                    }
                     if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p, Mprime_p,
                                                          gate)) {
-                        if constexpr (IsReturningInfo) {
-                            return std::make_optional(
-                                std::make_pair(gate, std::make_pair(pPrime, qPrime)));
-                        } else {
-                            return true;
+                        // Critical section for shared variables
+                        omp_set_lock(&found_lock);
+                        if (!found) { // Double-check to prevent multiple writes
+                            found = true;
+                            if constexpr (IsReturningInfo) {
+                                result = std::make_optional(std::make_pair(gate, std::make_pair(pPrime, qPrime)));
+                            }
                         }
+                        omp_unset_lock(&found_lock);
+                        break; // Break the inner gate loop
                     }
                 }
             }
+        }
+        omp_destroy_lock(&found_lock);
+
+        if constexpr (IsReturningInfo) {
+            return result;
+        } else {
+            return found;
         }
     } else {
         for (size_t pPrime = 0; pPrime < d; pPrime++) {

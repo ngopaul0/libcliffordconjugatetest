@@ -62,6 +62,25 @@ constexpr BruteForceReturnType<IsReturningInfo> notFoundValue() {
     }
 }
 
+template <bool IsReturningInfo>
+constexpr bool isFound(const BruteForceReturnType<IsReturningInfo>& value) {
+    if constexpr (IsReturningInfo) {
+        return value.has_value();
+    } else {
+        return value == true;
+    }
+}
+
+template <bool IsReturningInfo>
+constexpr BruteForceReturnType<IsReturningInfo>
+createValueFromFound(const Eigen::Matrix2i& S, const size_t pPrime, const size_t qPrime) {
+    if constexpr (IsReturningInfo) {
+        return std::make_optional(std::make_pair(S, std::make_pair(pPrime, qPrime)));
+    } else {
+        return true;
+    }
+}
+
 /**
  * Runs a brute-force Clifford-conjugate test based on Lemma 10
  *
@@ -87,8 +106,7 @@ BruteForceReturnType<IsReturningInfo> bruteForceTestCliffordConjugacy(
         return notFoundValue<IsReturningInfo>();
     }
 
-    using IterableType =
-        std::variant<const std::vector<Eigen::Matrix2i>*, const Sp1ZdMatrixRange*>;
+    using IterableType = std::variant<const std::vector<Eigen::Matrix2i>*, const Sp1ZdMatrixRange*>;
     IterableType iterable;
     // Optional to manage the lifetime of the dynamically created iterator (like dynamic stack
     // dispatch)
@@ -100,39 +118,44 @@ BruteForceReturnType<IsReturningInfo> bruteForceTestCliffordConjugacy(
         iterable = &sp1ZdIteratorOpt.value();
     }
 
+    // Variables for the parallel region
+    std::optional<BruteForceReturnType<IsReturningInfo>> result;
+    omp_lock_t result_lock;
+    omp_init_lock(&result_lock);
+
+    #pragma omp parallel for collapse(2) shared(result, result_lock) schedule(dynamic)
     for (size_t pPrime = 0; pPrime < d; pPrime++) {
         for (size_t qPrime = 0; qPrime < d; qPrime++) {
-            auto symplecticSearchResult = std::visit(
-                [&](auto&& current_gates) {
-                    for (const auto& gate : *current_gates) {
+            if (result.has_value()) {
+                continue;
+            }
+
+            std::visit(
+                [&](auto&& currentSymplecticTransforms) {
+                    for (const auto& S : *currentSymplecticTransforms) {
+                        if (result.has_value()) {
+                            return;
+                        }
                         if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p,
-                                                             Mprime_p, gate)) {
-                            if constexpr (IsReturningInfo) {
-                                return std::make_optional(
-                                    std::make_pair(gate, std::make_pair(pPrime, qPrime)));
-                            } else {
-                                return true;
+                                                             Mprime_p, S)) {
+                            // Found a match, acquire lock and set the result
+                            omp_set_lock(&result_lock);
+                            if (!result.has_value()) {
+                                result = std::make_optional(
+                                    createValueFromFound<IsReturningInfo>(S, pPrime, qPrime));
                             }
+                            omp_unset_lock(&result_lock);
+                            return;
                         }
                     }
-
-                    return notFoundValue<IsReturningInfo>();
                 },
                 iterable);
-
-            if constexpr (IsReturningInfo) {
-                if (symplecticSearchResult.has_value()) {
-                    return symplecticSearchResult;
-                }
-            } else {
-                if (symplecticSearchResult) {
-                    return true;
-                }
-            }
         }
     }
 
-    return notFoundValue<IsReturningInfo>();
+    omp_destroy_lock(&result_lock);
+
+    return result.value_or(notFoundValue<IsReturningInfo>());
 }
 
 } // namespace cliffconjtest

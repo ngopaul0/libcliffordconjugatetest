@@ -104,8 +104,11 @@ class MultiDimensionalArray {
             if (coords[i] >= dims[i]) {
                 std::stringstream ss;
                 ss << "coordinate (";
-                for (const auto& coordinate : coords) {
-                    ss << coordinate << ",";
+                for (size_t j = 0; j < coords.size(); j++) {
+                    ss << coords[j];
+                    if (j < coords.size() - 1) {
+                        ss << ", ";
+                    }
                 }
                 ss << ") is out of bounds ";
                 throw std::out_of_range(ss.str());
@@ -143,8 +146,8 @@ class MultiDimensionalArray {
 
     [[nodiscard]] size_t size() const { return data.size(); }
 
-    [[nodiscard]] TupleIterator indexIterator() const {
-        return TupleIterator(dims);
+    [[nodiscard]] TupleIterator<true> indexIterator() const {
+        return TupleIterator<true>(dims);
     }
 };
 

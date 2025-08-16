@@ -4,15 +4,47 @@
 #include <stdexcept>
 #include <vector>
 
+template <bool UseVariableModuli>
+struct OptionalField {
+    // Only defined when UseVariableModuli == true
+    const std::vector<size_t> moduli_;
+};
+
+template <>
+struct OptionalField<false> {
+    // Only defined when UseVariableModuli == false
+    const size_t modulus_;
+    const size_t dimensions_;
+};
+
 /**
  * @class TupleIterator
- * @brief An iterator for traversing a multidimensional space defined by a vector of dimensions.
+ * @brief Iterator for tuples in Z_{m_1} x Z_{m_2} x ... Z_{m_d}. If m := m_1 = m_2 = ... = m_d,
+ * then set UseVariableModuli to false
  *
  * This iterator generates tuples of non-negative integers. The dimensions vector specifies the
- * upper bound for each tuple coordinate. For example, with dimensions {2, 3, 4}, it will iterate
- * through all tuples in Z_2 x Z_3 x Z_4.
+ * upper bound for each tuple coordinate, i.e. the moduli for each coordinate. For example, with
+ * moduli {2, 3, 4}, it will iterate through all tuples in Z_2 x Z_3 x Z_4.
  *
  * This would allow for a generalization of nested loops, so a loop such as
+ * \code
+ * for (size_t a = 0; a < 2; a++) {
+ *     for (size_t b = 0; b < 3; b++) {
+ *         for (size_t c = 0; c < 4; c++) {
+ *             for (size_t d = 0; d < 5; d++) {
+ *                 f(a,b,c,d);
+ *             }
+ *         }
+ *     }
+ * }
+ * \endcode
+ * can just be replaced with
+ * \code
+ * for (const auto& tuple : TupleIterator<true>({2, 3, 4, 5})) {
+ *     f(tuple[0], tuple[1], tuple[2], tuple[3]);
+ * }
+ * \endcode
+ * For a generalization of Z_m^n, pass false to the template parameter. For example, for Z_3^4:
  * \code
  * size_t modulus = 3;
  * for (size_t a = 0; a < modulus; a++) {
@@ -28,7 +60,7 @@
  * can just be replaced with
  * \code
  * size_t modulus = 3;
- * for (const auto& tuple : TupleIterator({modulus, modulus, modulus, modulus})) {
+ * for (const auto& tuple : TupleIterator<false>(modulus, 4)) {
  *     f(tuple[0], tuple[1], tuple[2], tuple[3]);
  * }
  * \endcode
@@ -36,8 +68,14 @@
  * The iterator's core logic is a counter that increments like a digit system with a variable base
  * for each position. The last dimension (rightmost) increments first, and when it reaches its
  * limit, it "rolls over" and increments the next dimension to the left.
+ *
+ * @tparam UseVariableModuli Whether to use a variable modulus for each coordinate (e.g. for
+ * tuples in Z_2 x Z_3 x Z_4) or to use a single modulus for each coordinate (e.g. for Z_3^3).
+ * Using false will ensure that the vector of moduli is not allocated when it's known that the
+ * modulus is the same for all coordinates.
  */
-class TupleIterator {
+template <bool UseVariableModuli>
+class TupleIterator : OptionalField<UseVariableModuli> {
   public:
     // Required iterator type aliases for C++17 and later
     using iterator_category = std::forward_iterator_tag;
@@ -47,18 +85,21 @@ class TupleIterator {
     using reference = value_type&;
 
     /**
-     * @brief Constructs the beginning iterator.
-     * @param dims A const reference to the vector of dimension bounds.
-     * This vector must not be empty.
+     * @brief Constructs tuple iterator for variable moduli.
+     * Used if UseVariableModuli == true
+     * @param moduli Vector of moduli. This vector must not be empty. Warning: This will copy the
+     * moduli array.
      */
-    explicit TupleIterator(const std::vector<size_t>& dims)
-        : dimensions_(dims), current_tuple_(dims.size(), 0) {
-        if (dimensions_.empty()) {
+    template <bool B = UseVariableModuli, typename = std::enable_if_t<B>>
+    explicit TupleIterator(const std::vector<size_t>& moduli)
+        : OptionalField<UseVariableModuli>{moduli}, current_tuple_(moduli.size(), 0) {
+
+        if (this->moduli_.empty()) {
             // An empty dimensions vector means there is nothing to iterate over.
             is_end_ = true;
         } else {
             // Check for any zero dimensions, which would result in an empty iteration.
-            for (const size_t dim : dimensions_) {
+            for (const size_t dim : this->moduli_) {
                 if (dim == 0) {
                     is_end_ = true;
                     break;
@@ -68,14 +109,34 @@ class TupleIterator {
     }
 
     /**
-     * @brief Constructs the end iterator.
-     * @param dims A const reference to the vector of dimension bounds.
-     * The end iterator is conceptually an iterator that has gone past
-     * the last valid tuple.
+     * @brief Constructs tuple iterator for Z_modulus^dimensions.
+     * Used if UseVariableModuli == false
      */
-    TupleIterator(const std::vector<size_t>& dims, bool is_end)
-        : dimensions_(dims), current_tuple_(dims.size(), 0), is_end_(is_end) {}
+    template <bool B = UseVariableModuli, typename = std::enable_if_t<!B>>
+    TupleIterator(const size_t modulus, const size_t dimensions)
+        : OptionalField<UseVariableModuli>{modulus, dimensions}, current_tuple_(dimensions, 0) {}
 
+  private:
+    /**
+     * @brief Constructs tuple iterator for variable moduli.
+     * Used if UseVariableModuli == true
+     * @param moduli Vector of moduli. This vector must not be empty.
+     */
+    template <bool B = UseVariableModuli, typename = std::enable_if_t<B>>
+    TupleIterator(const std::vector<size_t>& moduli, bool is_end)
+        : OptionalField<UseVariableModuli>{moduli}, current_tuple_(moduli.size(), 0),
+          is_end_(is_end) {}
+
+    /**
+     * @brief Constructs tuple iterator for Z_modulus^dimensions.
+     * Used if UseVariableModuli == false
+     */
+    template <bool B = UseVariableModuli, typename = std::enable_if_t<!B>>
+    TupleIterator(const size_t modulus, const size_t dimensions, bool is_end)
+        : OptionalField<UseVariableModuli>{modulus, dimensions}, current_tuple_(dimensions, 0),
+          is_end_(is_end) {}
+
+  public:
     /**
      * @brief Dereferences the iterator to get the current tuple.
      * @return A const reference to the current tuple.
@@ -102,23 +163,44 @@ class TupleIterator {
             return *this; // Already at the end, no-op
         }
 
-        // Start from the last dimension and increment
-        size_t i = dimensions_.size();
-        while (i-- > 0) {
+        // Start from the last dimension and decrement
+        size_t i;
+        if constexpr (UseVariableModuli) {
+            i = this->moduli_.size();
+        } else {
+            i = this->dimensions_;
+        }
+
+        // e.g. for Z_3^3, suppose we're at (0, 0, 2)
+        while (true) {
+            i--;
+
             current_tuple_[i]++;
-            // Check if the current dimension has reached its limit
-            if (current_tuple_[i] < dimensions_[i]) {
-                // If not, we are done, and can break
+            // Check if the current dimension has reached its limit.
+            // e.g. the example should be incremented from (0, 0, 2) to (0, 0, 3). But we're in Z_3,
+            // so the limit of 3 is reached.
+            size_t modulus;
+            if constexpr (UseVariableModuli) {
+                modulus = this->moduli_[i];
+            } else {
+                modulus = this->modulus_;
+            }
+
+            if (current_tuple_[i] < modulus) {
+                // If limit not reached, we are done, and can break
                 break;
             } else {
                 // If it has, reset to 0 and continue to the next dimension to the left
+                // e.g. the example should be incremented in the next iteration (0, 1, 0) and then
+                // break
                 current_tuple_[i] = 0;
+
+                // Can't roll over to anything else; iteration is complete
+                if (i == 0) {
+                    is_end_ = true;
+                    break;
+                }
             }
-        }
-        // If the loop finished without a break, it means all dimensions "rolled over"
-        // This signifies that the iteration is complete.
-        if (i == static_cast<size_t>(-1)) {
-            is_end_ = true;
         }
 
         return *this;
@@ -143,8 +225,14 @@ class TupleIterator {
         if (is_end_ && other.is_end_) {
             return true;
         }
-        return dimensions_ == other.dimensions_ && current_tuple_ == other.current_tuple_ &&
-               is_end_ == other.is_end_;
+
+        if constexpr (UseVariableModuli) {
+            return this->moduli_ == other.moduli_ && current_tuple_ == other.current_tuple_ &&
+                   is_end_ == other.is_end_;
+        } else {
+            return this->modulus_ == other.modulus_ && this->dimensions_ == other.dimensions_ &&
+                   current_tuple_ == other.current_tuple_ && is_end_ == other.is_end_;
+        }
     }
 
     /**
@@ -154,30 +242,25 @@ class TupleIterator {
      */
     bool operator!=(const TupleIterator& other) const { return !(*this == other); }
 
-    [[nodiscard]] TupleIterator begin() const { return TupleIterator(dimensions_); }
+    [[nodiscard]] TupleIterator begin() const {
+        if constexpr (UseVariableModuli) {
+            return TupleIterator(this->moduli_);
+        } else {
+            return TupleIterator(this->modulus_, this->dimensions_);
+        }
+    }
 
-    [[nodiscard]] TupleIterator end() const { return TupleIterator(dimensions_, true); }
+    [[nodiscard]] TupleIterator end() const {
+        if constexpr (UseVariableModuli) {
+            return TupleIterator(this->moduli_, true);
+        } else {
+            return TupleIterator(this->modulus_, this->dimensions_, true);
+        }
+    }
 
   private:
-    const std::vector<size_t>& dimensions_;
     std::vector<size_t> current_tuple_;
     bool is_end_ = false;
-};
-
-/**
- * @brief A container-like class that provides begin() and end() iterators for Z_m^n.
- */
-class ZmTupleRange {
-  public:
-    explicit ZmTupleRange(const size_t n, const size_t modulus)
-        : dimensions_(std::vector(n, modulus)) {}
-
-    [[nodiscard]] TupleIterator begin() const { return TupleIterator(dimensions_); }
-
-    [[nodiscard]] TupleIterator end() const { return {dimensions_, true}; }
-
-  private:
-    const std::vector<size_t> dimensions_;
 };
 
 #endif // TUPLEITERATOR_H

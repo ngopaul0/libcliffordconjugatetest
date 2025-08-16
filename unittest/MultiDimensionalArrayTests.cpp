@@ -256,6 +256,7 @@ TEST_CASE("MultiDimensionalArray Const Correctness", "[MultiDimensionalArray]") 
     }
 }
 
+#ifdef CATCH_DEBUG_ONLY
 TEST_CASE("MultiDimensionalArray use-after-free", "[MultiDimensionalArray]") {
     SECTION("use-after-free from index iterator") {
         auto *arr = new MultiDimensionalArray<int, true>({2, 2});
@@ -265,3 +266,4 @@ TEST_CASE("MultiDimensionalArray use-after-free", "[MultiDimensionalArray]") {
         CHECK_THROWS(it.begin());
     }
 }
+#endif

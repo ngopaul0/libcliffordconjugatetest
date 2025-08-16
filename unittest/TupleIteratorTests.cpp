@@ -66,7 +66,6 @@ TEST_CASE("TupleIterator", "[tupleiterator]") {
         auto it = TupleIterator<VariableModuli>({3, 3, 3, 3}).begin();
         CHECK_THROWS_AS(it.begin(), std::length_error);
     }
-#endif
 
     SECTION("Use-after-free: dynamically allocated iterator") {
         auto *baseIterator = new TupleIterator<VariableModuli>({3, 3, 3, 3});
@@ -75,6 +74,7 @@ TEST_CASE("TupleIterator", "[tupleiterator]") {
         // std::bad_alloc
         CHECK_THROWS(it.begin());
     }
+#endif
 
     SECTION(
         "Iterates correctly over all elements of Z_3 x Z_2 x Z_5 with UseVariableModuli = true") {

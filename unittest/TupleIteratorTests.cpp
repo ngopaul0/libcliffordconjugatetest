@@ -53,7 +53,8 @@ TEST_CASE("TupleIterator", "[tupleiterator]") {
         }
     }
 
-    SECTION("Iterates correctly over all elements of Z_3 x Z_2 x Z_5 with UseVariableModuli = true") {
+    SECTION(
+        "Iterates correctly over all elements of Z_3 x Z_2 x Z_5 with UseVariableModuli = true") {
         auto iterator = TupleIterator<true>({3, 2, 5});
         size_t index = 0;
         for (size_t a = 0; a < 3; a++) {

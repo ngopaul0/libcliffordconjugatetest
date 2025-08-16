@@ -34,9 +34,9 @@ struct OptionalArrayField<false> {
  */
 template <typename T, bool UseVariableDimension>
 class MultiDimensionalArray : OptionalArrayField<UseVariableDimension> {
-public:
+  public:
     class iterator {
-    public:
+      public:
         // Required iterator type aliases for C++17 and later
         using iterator_category = std::random_access_iterator_tag;
         using value_type = T;
@@ -105,11 +105,11 @@ public:
         bool operator<=(const iterator& other) const { return !(*this > other); }
         bool operator>=(const iterator& other) const { return !(*this < other); }
 
-    private:
+      private:
         pointer ptr_;
     };
 
-private:
+  private:
     std::vector<T> data{};
 
     [[nodiscard]] size_t get_index(const std::vector<size_t>& coords) const {
@@ -122,7 +122,8 @@ private:
 
         if (coords.size() != numDimensions) {
             std::stringstream ss;
-            ss << "coordinate size " << coords.size() << " does not match number of dimensions " << numDimensions;
+            ss << "coordinate size " << coords.size() << " does not match number of dimensions "
+               << numDimensions;
             throw std::invalid_argument(ss.str());
         }
         size_t index = 0;
@@ -154,15 +155,19 @@ private:
         return index;
     }
 
-public:
+  public:
     template <bool B = UseVariableDimension, typename = std::enable_if_t<B>>
-    explicit MultiDimensionalArray(const std::vector<size_t>& dimensions) : OptionalArrayField<UseVariableDimension>({dimensions}) {
-        size_t totalElements = std::accumulate(this->dimensions_.begin(), this->dimensions_.end(), 1, std::multiplies());
+    explicit MultiDimensionalArray(const std::vector<size_t>& dimensions)
+        : OptionalArrayField<UseVariableDimension>({dimensions}) {
+        size_t totalElements = std::accumulate(this->dimensions_.begin(), this->dimensions_.end(),
+                                               1, std::multiplies());
         data.resize(totalElements);
     }
 
     template <bool B = UseVariableDimension, typename = std::enable_if_t<!B>>
-    explicit MultiDimensionalArray(const size_t numCoordinates, const size_t dimensionForAllCoordinates) : OptionalArrayField<UseVariableDimension>({dimensionForAllCoordinates, numCoordinates}) {
+    explicit MultiDimensionalArray(const size_t numCoordinates,
+                                   const size_t dimensionForAllCoordinates)
+        : OptionalArrayField<UseVariableDimension>({dimensionForAllCoordinates, numCoordinates}) {
         data.resize(std::pow(dimensionForAllCoordinates, numCoordinates));
     }
 
@@ -177,10 +182,14 @@ public:
     iterator end() const { return iterator(const_cast<T*>(&data[0] + data.size())); }
 
     template <bool B = UseVariableDimension, typename = std::enable_if_t<B>>
-    [[nodiscard]] const std::vector<size_t>& dimensions() const { return this->dimensions_; }
+    [[nodiscard]] const std::vector<size_t>& dimensions() const {
+        return this->dimensions_;
+    }
 
     template <bool B = UseVariableDimension, typename = std::enable_if_t<!B>>
-    [[nodiscard]] size_t dimensionPerCoordinate() const { return this->dimensionPerCoordinate_; }
+    [[nodiscard]] size_t dimensionPerCoordinate() const {
+        return this->dimensionPerCoordinate_;
+    }
 
     [[nodiscard]] size_t numCoordinatePlaces() const {
         if constexpr (UseVariableDimension) {
@@ -203,6 +212,6 @@ public:
     }
 };
 
-}
+} // namespace cliffconjtest
 
 #endif // MULTIDIMENSIONALARRAY_H

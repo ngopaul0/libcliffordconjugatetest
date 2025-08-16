@@ -78,7 +78,7 @@ struct OptionalField<false> {
  */
 template <bool UseVariableModuli>
 class TupleIterator : OptionalField<UseVariableModuli> {
-public:
+  public:
     // Required iterator type aliases for C++17 and later
     using iterator_category = std::forward_iterator_tag;
     using value_type = std::vector<size_t>;
@@ -118,7 +118,7 @@ public:
     TupleIterator(const size_t modulus, const size_t dimensions)
         : OptionalField<UseVariableModuli>{modulus, dimensions}, current_tuple_(dimensions, 0) {}
 
-private:
+  private:
     /**
      * @brief Constructs tuple iterator for variable moduli.
      * Used if UseVariableModuli == true
@@ -138,7 +138,7 @@ private:
         : OptionalField<UseVariableModuli>{modulus, dimensions}, current_tuple_(dimensions, 0),
           is_end_(is_end) {}
 
-public:
+  public:
     /**
      * @brief Dereferences the iterator to get the current tuple.
      * @return A const reference to the current tuple.
@@ -260,11 +260,11 @@ public:
         }
     }
 
-private:
+  private:
     std::vector<size_t> current_tuple_;
     bool is_end_ = false;
 };
 
-}
+} // namespace cliffconjtest
 
 #endif // TUPLEITERATOR_H

@@ -62,9 +62,7 @@ class CliffordGateIterator {
         return {d_, d_ + 1};
     }
 
-    void reset() {
-        current_tuple_ = {0, 0, 0};
-    }
+    void reset() { current_tuple_ = {0, 0, 0}; }
 
     // --- Operators ---
 
@@ -185,10 +183,12 @@ class CliffordGateIterator {
             firstMatrix = Eigen::MatrixXcd::Identity(d_, d_);
         } else {
             Eigen::MatrixXcd factor = hadamardGate(d_, omega_);
-            firstMatrix = diagonalSymplecticCliffordGate(d_, current_tuple_[0] - 1, inv_2_, omega_) * factor;
+            firstMatrix =
+                diagonalSymplecticCliffordGate(d_, current_tuple_[0] - 1, inv_2_, omega_) * factor;
         }
 
-        Eigen::MatrixXcd secondMatrix = diagonalSymplecticCliffordGate(d_, current_tuple_[1], inv_2_, omega_);
+        Eigen::MatrixXcd secondMatrix =
+            diagonalSymplecticCliffordGate(d_, current_tuple_[1], inv_2_, omega_);
 
         // The last tuple element, z, ranges from 0 <= z < d - 1, and it is meant to iterate through
         // all the units of Z_d, i.e. non-zero elements. Adding 1 will result in the range being

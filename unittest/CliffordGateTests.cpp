@@ -38,7 +38,7 @@ void runUniquenessCliffordTest(size_t d) {
 }
 
 #define UNIQUENESS_TEST_D(dval)                                                                    \
-SECTION("Generates unique Clifford gates: d = " #dval) { runUniquenessCliffordTest(dval); }
+    SECTION("Generates unique Clifford gates: d = " #dval) { runUniquenessCliffordTest(dval); }
 
 TEST_CASE("makeCliffordGateIterator", "[cliffordgateiterator]") {
     SECTION("Generates valid Clifford gates") {

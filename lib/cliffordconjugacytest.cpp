@@ -149,7 +149,6 @@ bool validateNecessaryCondFromLinDepPoints(const Eigen::Index d, const std::comp
 
 bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                          const Eigen::Ref<const Eigen::MatrixXcd>& M_prime) {
-    Eigen::setNbThreads(1);
     if (M.rows() != M.cols() || M_prime.rows() != M_prime.cols() || M_prime.cols() != M.cols()) {
         return false;
     }
@@ -187,14 +186,14 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     std::unordered_map<int, AbsValMap> thread_maps;
 
     //#pragma omp parallel for collapse(2)
-    //#pragma omp parallel
+    #pragma omp parallel
     {
         // Each thread gets its own ID
         int thread_id = omp_get_thread_num();
         // This thread's local map
         // AbsValMap& local_map = thread_maps[thread_id];
         AbsValMap* local_map_ptr;
-        //#pragma omp critical
+        #pragma omp critical
         {
             local_map_ptr = &thread_maps[thread_id];
         }
@@ -337,21 +336,9 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
         // The size of this is at most O(d), because if all nonzero entries have linearly dependent
         // coordinates, then all the coordinates are in a line. A line can have at most O(d) points
         // in Z_d^2.
-
-        bool found = false;
-
-        // Use a shared flag and lock for a quick exit from the parallel loop
-        omp_lock_t found_lock;
-        omp_init_lock(&found_lock);
-
         const auto& possibleU = histogramMprime.get(key);
-        #pragma omp parallel for shared(found) schedule(dynamic)
-        for (size_t u1 = 0; u1 < possibleU.size(); ++u1) {
-            const auto& u = possibleU[u1];
-            // Fast exit check for all threads
-            if (found) {
-                continue;
-            }
+        // TODO: Refactor
+        for (const auto& u : possibleU) {
             // For each beta_u with the same absolute value
             const auto beta = Mprime_p(u.first, u.second);
             // Try to find integer k such that alpha_v = omega^k beta_u
@@ -366,10 +353,6 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
             // Worst case O(d) to run this (returning true requires going through all O(d) entries)
             if (!validateNecessaryCondFromLinDepPoints(d, omega, histogramM, M_p, Mprime_p,
                                                        sortedKeysM, v, u, k)) {
-                continue;
-            }
-
-            if (found) {
                 continue;
             }
 
@@ -389,13 +372,8 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                 // is x0 = -(m1*x1 - n0)/m0, x2 = -(m1*x3 - n1)/m0, x1 and x3 free
 
                 const auto m0_inv = modInverse(m0, d);
-
                 for (size_t x1 = 0; x1 < d; x1++) {
                     for (size_t x3 = 0; x3 < d; x3++) {
-                        if (found) {
-                            continue;
-                        }
-
                         const auto x0 = safeMod(safeMod(n0 - m1 * x1, d) * m0_inv, d);
                         const auto x2 = safeMod(safeMod(n1 - m1 * x3, d) * m0_inv, d);
 
@@ -404,17 +382,14 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                             S << x0, x1, x2, x3;
                             if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p,
                                                                  Mprime_p, S)) {
-                                omp_set_lock(&found_lock);
-                                found = true;
-                                omp_unset_lock(&found_lock);
+                                return true;
                             }
                         }
                     }
                 }
             }
         }
-        omp_destroy_lock(&found_lock);
-        return found;
+        return false;
     }
     const auto linIndepKey = linIndepCoordOpt.value().first;
     const auto linIndepCoord = linIndepCoordOpt.value().second;
@@ -452,22 +427,16 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     // exit early without reaching the O(d^2) check further inside.
 
     bool finalValue = false;
-
+    #pragma omp parallel
     {
         volatile bool condition_met = false;
 
-        // Use a lock to protect the shared 'found' variable
-        omp_lock_t found_lock;
-        omp_init_lock(&found_lock);
-
-        #pragma omp parallel for collapse(2) shared(finalValue) schedule(dynamic)
-        for (size_t u1 = 0; u1 < possibleMappingsU.size(); u1++) {
-            for (size_t u2 = 0; u2 < possibleMappingsUPrime.size(); u2++) {
-                const auto& uMap = possibleMappingsU[u1];
-                const auto& uPrimeMap = possibleMappingsUPrime[u2];
+        #pragma omp for collapse(2)
+        for (const auto& uMap : possibleMappingsU) {
+            for (const auto& uPrimeMap : possibleMappingsUPrime) {
                 #pragma omp cancellation point for
-                if (finalValue) {
-                    continue;
+                if (condition_met) {
+                    #pragma omp cancel for
                 }
                 // This solves the equation S.[u u'] = [S(u) S(u')] for S, where u, u' are in Z_d^2
                 // and linearly independent. The linear independence allows us to deterministically
@@ -516,8 +485,8 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                         // too far from an integer
                         continue;
                     }
-                    if (finalValue) {
-                        continue;
+                    if (condition_met) {
+                        #pragma omp cancel for
                     }
 
                     // Via Lemma 10, we must have
@@ -540,7 +509,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                     S << x0, x1, x2, x3;
                     // Verify this works for all p, q
                     // Check is worst-case O(d^2), but it will exit quickly if it finds a bad value
-                    // #pragma omp cancellation point for
+                    #pragma omp cancellation point for
 
                     bool foundBadValue = false;
                     for (size_t p = 0; p < d; p++) {
@@ -558,7 +527,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                                 break;
                             }
                         }
-                        if (foundBadValue || finalValue) {
+                        if (foundBadValue) {
                             break;
                         }
                     }
@@ -566,16 +535,19 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
                     if (!foundBadValue) {
                         // Signal that the loop should be canceled
-                        omp_set_lock(&found_lock);
                         condition_met = true;
-                        finalValue = true;
-                        omp_unset_lock(&found_lock);
                         #pragma omp cancel for
                         // return true;
                     }
 
                 }
             }
+        }
+
+        #pragma omp critical
+        {
+            if (condition_met)
+                finalValue = true;
         }
     }
 

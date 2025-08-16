@@ -31,6 +31,7 @@ Eigen::MatrixXcd diagonalSymplecticCliffordGate(int d, int b, int inv_2,
  */
 class CliffordGateIterator {
   public:
+    // Required iterator type aliases for C++17 and later
     using value_type = Eigen::MatrixXcd;
     using difference_type = std::ptrdiff_t;
     using pointer = value_type*;

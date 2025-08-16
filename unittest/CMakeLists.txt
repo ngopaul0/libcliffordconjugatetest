@@ -11,6 +11,8 @@ add_executable(unittest CliffConjTests.cpp
         UtilTests.cpp
         Sp1ZdIteratorTests.cpp
         CliffordGateTests.cpp
+        MultiDimensionalArrayTests.cpp
+        TupleIteratorTests.cpp
 )
 include(../cmake/eigen3.cmake)
 

@@ -8,5 +8,7 @@ add_library(cliffordconjugatetest STATIC cliffordconjugacytest.cpp cliffordconju
         internal/symplecticiterator.h
         internal/bruteforcetest.h
         internal/conjtestlemma10.h
+        internal/MultiDimensionalArray.h
+        internal/tupleiterator.h
 )
 target_link_libraries(cliffordconjugatetest PRIVATE Eigen3::Eigen)

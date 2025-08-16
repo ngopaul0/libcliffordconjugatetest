@@ -46,6 +46,7 @@ inline Eigen::Matrix2i A(size_t f, size_t modulus) {
  */
 class Sp1ZdMatrixIterator {
   public:
+    // Required iterator type aliases for C++17 and later
     using value_type = Eigen::Matrix2i;
     using difference_type = std::ptrdiff_t;
     using pointer = value_type*;

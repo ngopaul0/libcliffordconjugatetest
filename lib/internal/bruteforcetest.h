@@ -53,6 +53,15 @@ using Lemma10Info = std::pair<Eigen::Matrix2i, std::pair<size_t, size_t>>;
 template <bool ReturnOptional>
 using BruteForceReturnType = std::conditional_t<ReturnOptional, std::optional<Lemma10Info>, bool>;
 
+template <bool IsReturningInfo>
+constexpr BruteForceReturnType<IsReturningInfo> notFoundValue() {
+    if constexpr (IsReturningInfo) {
+        return std::nullopt;
+    } else {
+        return false;
+    }
+}
+
 /**
  * Runs a brute-force Clifford-conjugate test based on Lemma 10
  *
@@ -75,55 +84,55 @@ BruteForceReturnType<IsReturningInfo> bruteForceTestCliffordConjugacy(
 
     const size_t d = M.rows();
     if (d != M.cols() || Mprime.rows() != Mprime.cols() || Mprime.rows() != d) {
-        if constexpr (IsReturningInfo) {
-            return std::nullopt;
-        } else {
-            return false;
-        }
+        return notFoundValue<IsReturningInfo>();
     }
 
+    using IterableType =
+        std::variant<const std::vector<Eigen::Matrix2i>*, const Sp1ZdMatrixRange*>;
+    IterableType iterable;
+    // Optional to manage the lifetime of the dynamically created iterator (like dynamic stack
+    // dispatch)
+    std::optional<Sp1ZdMatrixRange> sp1ZdIteratorOpt;
     if (gates.has_value()) {
-        for (size_t pPrime = 0; pPrime < d; pPrime++) {
-            for (size_t qPrime = 0; qPrime < d; qPrime++) {
-                for (const auto& gate : gates->get().getGates()) {
-                    if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p, Mprime_p,
-                                                         gate)) {
-                        if constexpr (IsReturningInfo) {
-                            return std::make_optional(
-                                std::make_pair(gate, std::make_pair(pPrime, qPrime)));
-                        } else {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
+        iterable = &gates->get().getGates();
     } else {
-        for (size_t pPrime = 0; pPrime < d; pPrime++) {
-            for (size_t qPrime = 0; qPrime < d; qPrime++) {
-                // Use an iterator to avoid storing all the matrices in memory. The iterator
-                // is efficient as it's just multiplying 2x2 matrices (constant-time).
-                auto gateIterator = Sp1ZdMatrixRange(d);
-                for (const auto& gate : gateIterator) {
-                    if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p, Mprime_p,
-                                                         gate)) {
-                        if constexpr (IsReturningInfo) {
-                            return std::make_optional(
-                                std::make_pair(gate, std::make_pair(pPrime, qPrime)));
-                        } else {
-                            return true;
+        sp1ZdIteratorOpt.emplace(d);
+        iterable = &sp1ZdIteratorOpt.value();
+    }
+
+    for (size_t pPrime = 0; pPrime < d; pPrime++) {
+        for (size_t qPrime = 0; qPrime < d; qPrime++) {
+            auto symplecticSearchResult = std::visit(
+                [&](auto&& current_gates) {
+                    for (const auto& gate : *current_gates) {
+                        if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p,
+                                                             Mprime_p, gate)) {
+                            if constexpr (IsReturningInfo) {
+                                return std::make_optional(
+                                    std::make_pair(gate, std::make_pair(pPrime, qPrime)));
+                            } else {
+                                return true;
+                            }
                         }
                     }
+
+                    return notFoundValue<IsReturningInfo>();
+                },
+                iterable);
+
+            if constexpr (IsReturningInfo) {
+                if (symplecticSearchResult.has_value()) {
+                    return symplecticSearchResult;
+                }
+            } else {
+                if (symplecticSearchResult) {
+                    return true;
                 }
             }
         }
     }
 
-    if constexpr (IsReturningInfo) {
-        return std::nullopt;
-    } else {
-        return false;
-    }
+    return notFoundValue<IsReturningInfo>();
 }
 
 } // namespace cliffconjtest

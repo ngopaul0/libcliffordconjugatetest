@@ -38,6 +38,35 @@ TEST_CASE("Brute force Clifford-conjugate test", "[benchmark][bruteforce]") {
         });
     };
 
+    BENCHMARK_ADVANCED("d=13: Non-example, Linearly dependent M_p")(Catch::Benchmark::Chronometer meter) {
+        const int d = 13; // Example dimension
+        const int inv_2 = fastPowerMod(2, d - 2, d);
+        const std::complex<double> omega =
+            std::exp(std::complex<double>(0, 2.0 * pi / d));
+        const Eigen::MatrixXcd Mprime = W(d, 1, 2, inv_2, omega) + W(d, 2, 4, inv_2, omega)
+            + W(d, 3, 6, inv_2, omega) +  W(d, 4, 8, inv_2, omega);
+
+        const Eigen::MatrixXcd C = W(d, 3, 4, inv_2, omega) * cliffordPermutationGate(d, 7);
+        const Eigen::MatrixXcd Cstar = C.adjoint();
+        Eigen::MatrixXcd M = C * Mprime * Cstar;
+        M(0,3) += 0.2;
+
+        Eigen::MatrixXcd M_p = createMpMatrix(M, omega, inv_2);
+        Eigen::MatrixXcd Mprime_p = createMpMatrix(Mprime, omega, inv_2);
+        Sp1ZdGates gates(d);
+
+        meter.measure([M, Mprime, omega, M_p, Mprime_p, gates] {
+            bool result = bruteForceTestCliffordConjugacy(
+                M, Mprime, omega, M_p, Mprime_p, std::make_optional(std::ref(gates)));
+            if (result) {
+                INFO("M = " << M);
+                INFO("Mprime = " << Mprime);
+                FAIL("expected to be not Clifford-conjugate");
+            }
+            return result;
+        });
+    };
+
     BENCHMARK_ADVANCED("d=11: Linearly dependent M_p -- direct Clifford conjugation")(Catch::Benchmark::Chronometer meter) {
         const int d = 11; // Example dimension
         const int inv_2 = fastPowerMod(2, d - 2, d);
@@ -188,6 +217,30 @@ TEST_CASE("Algorithm for Clifford-conjugate test", "[benchmark][algorithm]") {
         const auto M_p = createMpMatrix((M), omega, inv_2);
         const auto Mprime_p = createMpMatrix((Mprime), omega, inv_2);
         CHECK(!bruteForceTestCliffordConjugacy(M, Mprime, omega, M_p, Mprime_p));
+
+        meter.measure([M, Mprime] {
+            bool result = isCliffordConjugate(M, Mprime);
+            if (result) {
+                INFO("M = " << M);
+                INFO("Mprime = " << Mprime);
+                FAIL("unexpectedly got that the matrices are Clifford-conjugate");
+            }
+            return result;
+        });
+    };
+
+    BENCHMARK_ADVANCED("d=13: Non-example, Linearly dependent M_p")(Catch::Benchmark::Chronometer meter) {
+        const int d = 13; // Example dimension
+        const int inv_2 = fastPowerMod(2, d - 2, d);
+        const std::complex<double> omega =
+            std::exp(std::complex<double>(0, 2.0 * pi / d));
+        const Eigen::MatrixXcd Mprime = W(d, 1, 2, inv_2, omega) + W(d, 2, 4, inv_2, omega)
+            + W(d, 3, 6, inv_2, omega) +  W(d, 4, 8, inv_2, omega);
+
+        const Eigen::MatrixXcd C = W(d, 3, 4, inv_2, omega) * cliffordPermutationGate(d, 7);
+        const Eigen::MatrixXcd Cstar = C.adjoint();
+        Eigen::MatrixXcd M = C * Mprime * Cstar;
+        M(0,3) += 0.2;
 
         meter.measure([M, Mprime] {
             bool result = isCliffordConjugate(M, Mprime);

@@ -1,0 +1,55 @@
+$ cmake-build-release/benchmark/benchmark --benchmark-warmup-time 2000 --benchmark-samples 100 [algorithm]
+Filters: [algorithm]
+Randomness seeded to: 517838858
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+benchmark is a Catch2 v3.8.1 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+Algorithm for Clifford-conjugate test
+-------------------------------------------------------------------------------
+libcliffordconjugatetest/benchmark/CliffConjBenchmark.cpp:183
+...............................................................................
+
+benchmark name                       samples       iterations    est run time
+                                     mean          low mean      high mean
+                                     std dev       low std dev   high std dev
+-------------------------------------------------------------------------------
+d = 5: Non-example, two linearly
+dependent Pauli basis elements
+bypassing histogram check                      100             3     2.2005 ms
+                                        10.1832 us    10.0934 us    10.3351 us
+                                        580.113 ns    401.825 ns    899.429 ns
+
+d=13: Non-example, Linearly
+dependent M_p                                  100             1     7.2079 ms
+                                        73.4374 us    72.9171 us    74.4479 us
+                                        3.58044 us    2.15954 us    6.05115 us
+
+d=13: Non-example, with histogram
+bypass                                         100             1     7.6863 ms
+                                        76.9733 us    76.4682 us    77.9485 us
+                                        3.45784 us     2.1769 us    6.12275 us
+
+d=5: Non-example, Linearly
+dependent M_p                                  100             4      2.412 ms
+                                         5.9807 us    5.92219 us      6.106 us
+                                        419.319 ns    229.365 ns    712.965 ns
+
+d=11: Linearly dependent M_p                   100             1     7.4349 ms
+                                        74.6229 us    74.1722 us    75.5517 us
+                                        3.17128 us    1.93871 us     5.9633 us
+
+d=7: Linearly dependent M_p                    100             1     2.5827 ms
+                                        25.5841 us    25.3524 us    26.0949 us
+                                        1.67019 us    817.242 ns      2.894 us
+
+d=7, Clifford-conjugate, 2 basis
+elements                                       100             1     2.4179 ms
+                                        23.8193 us    23.6391 us    24.2467 us
+                                        1.33286 us    671.466 ns    2.47363 us
+
+
+===============================================================================
+All tests passed (828 assertions in 1 test case)

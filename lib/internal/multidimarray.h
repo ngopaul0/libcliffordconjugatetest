@@ -9,12 +9,31 @@
 #include "tupleiterator.h"
 
 namespace cliffconjtest {
+
+template <bool UseVariableDimension>
+struct OptionalArrayField {
+    // Only defined when UseVariableDimension == true
+    const std::vector<size_t> dimensions_;
+};
+
+template <>
+struct OptionalArrayField<false> {
+    // Only defined when UseVariableDimension == false
+
+    /**
+     * Specifies the single dimension per coordinate.
+     */
+    const size_t dimensionPerCoordinate_;
+    const size_t numCoordinatePlaces_;
+};
+
 /**
  * A class for multidimensional arrays, where each dimension can have a variable size.
  * @tparam T The type to store
+ * @tparam UseVariableDimension Whether the dimensions of the array are different.
  */
-template <typename T>
-class MultiDimensionalArray {
+template <typename T, bool UseVariableDimension>
+class MultiDimensionalArray : OptionalArrayField<UseVariableDimension> {
 public:
     class iterator {
     public:
@@ -92,17 +111,32 @@ public:
 
 private:
     std::vector<T> data{};
-    std::vector<size_t> dims;
 
     [[nodiscard]] size_t get_index(const std::vector<size_t>& coords) const {
-        if (coords.size() != dims.size()) {
-            throw std::invalid_argument("Coordinate size does not match dimension size.");
+        int numDimensions;
+        if constexpr (UseVariableDimension) {
+            numDimensions = this->dimensions_.size();
+        } else {
+            numDimensions = this->numCoordinatePlaces_;
+        }
+
+        if (coords.size() != numDimensions) {
+            std::stringstream ss;
+            ss << "coordinate size " << coords.size() << " does not match number of dimensions " << numDimensions;
+            throw std::invalid_argument(ss.str());
         }
         size_t index = 0;
         size_t multiplier = 1;
         // Stores data like expansion of a variable-base expansion of number
-        for (int i = dims.size() - 1; i >= 0; i--) {
-            if (coords[i] >= dims[i]) {
+        for (int i = numDimensions - 1; i >= 0; i--) {
+            size_t thisDimension;
+            if constexpr (UseVariableDimension) {
+                thisDimension = this->dimensions_[i];
+            } else {
+                thisDimension = this->dimensionPerCoordinate_;
+            }
+
+            if (coords[i] >= thisDimension) {
                 std::stringstream ss;
                 ss << "coordinate (";
                 for (size_t j = 0; j < coords.size(); j++) {
@@ -115,22 +149,21 @@ private:
                 throw std::out_of_range(ss.str());
             }
             index += coords[i] * multiplier;
-            multiplier *= dims[i];
+            multiplier *= thisDimension;
         }
         return index;
     }
 
 public:
-    explicit MultiDimensionalArray(const std::vector<size_t>& dimensions) : dims(dimensions) {
-        size_t totalElements = std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<>());
+    template <bool B = UseVariableDimension, typename = std::enable_if_t<B>>
+    explicit MultiDimensionalArray(const std::vector<size_t>& dimensions) : OptionalArrayField<UseVariableDimension>({dimensions}) {
+        size_t totalElements = std::accumulate(this->dimensions_.begin(), this->dimensions_.end(), 1, std::multiplies());
         data.resize(totalElements);
     }
 
-    explicit MultiDimensionalArray(const size_t n, const size_t dimension) : dims(dimension) {
-        for (size_t i = 0; i < dimension; ++i) {
-            dims[i] = n;
-        }
-        data.resize(std::pow(n, dimension));
+    template <bool B = UseVariableDimension, typename = std::enable_if_t<!B>>
+    explicit MultiDimensionalArray(const size_t numCoordinates, const size_t dimensionForAllCoordinates) : OptionalArrayField<UseVariableDimension>({dimensionForAllCoordinates, numCoordinates}) {
+        data.resize(std::pow(dimensionForAllCoordinates, numCoordinates));
     }
 
     T& operator()(const std::vector<size_t>& coords) { return data[get_index(coords)]; }
@@ -143,12 +176,30 @@ public:
     iterator begin() const { return iterator(const_cast<T*>(&data[0])); }
     iterator end() const { return iterator(const_cast<T*>(&data[0] + data.size())); }
 
-    [[nodiscard]] const std::vector<size_t>& dimensions() const { return dims; }
+    template <bool B = UseVariableDimension, typename = std::enable_if_t<B>>
+    [[nodiscard]] const std::vector<size_t>& dimensions() const { return this->dimensions_; }
+
+    template <bool B = UseVariableDimension, typename = std::enable_if_t<!B>>
+    [[nodiscard]] size_t dimensionPerCoordinate() const { return this->dimensionPerCoordinate_; }
+
+    [[nodiscard]] size_t numCoordinatePlaces() const {
+        if constexpr (UseVariableDimension) {
+            return this->dimensions_.size();
+        } else {
+            return this->numCoordinatePlaces_;
+        }
+    }
 
     [[nodiscard]] size_t size() const { return data.size(); }
 
+    template <bool B = UseVariableDimension, typename = std::enable_if_t<B>>
     [[nodiscard]] TupleIterator<true> indexIterator() const {
-        return TupleIterator<true>(dims);
+        return TupleIterator<true>(this->dimensions_);
+    }
+
+    template <bool B = UseVariableDimension, typename = std::enable_if_t<!B>>
+    [[nodiscard]] TupleIterator<false> indexIterator() const {
+        return TupleIterator<false>(this->dimensionPerCoordinate_, this->numCoordinatePlaces_);
     }
 };
 

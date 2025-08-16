@@ -5,6 +5,7 @@
 #include <vector>
 
 namespace cliffconjtest {
+
 template <bool UseVariableModuli>
 struct OptionalField {
     // Only defined when UseVariableModuli == true

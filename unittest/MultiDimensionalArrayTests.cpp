@@ -20,16 +20,16 @@ struct SomeData {
 
 TEST_CASE("MultiDimensionalArray with custom struct", "[multidimensionalarray][tupleiterator]") {
     SECTION("Constructs correctly") {
-        auto A = MultiDimensionalArray<SomeData>(4, 2);
+        auto A = MultiDimensionalArray<SomeData, false>(4, 2);
         CHECK(A.size() == std::pow(4, 2));
 
-        auto B = MultiDimensionalArray<SomeData>({2, 3, 4, 5});
+        auto B = MultiDimensionalArray<SomeData, true>({2, 3, 4, 5});
         CHECK(B.size() == 2 * 3 * 4 * 5);
         CHECK(B.dimensions().size() == 4);
     }
 
     SECTION("Iterates correctly") {
-        auto A = MultiDimensionalArray<SomeData>(4, 2);
+        auto A = MultiDimensionalArray<SomeData, false>(2, 4);
         for (const auto& item : A) {
             CHECK(item.a == 0);
             CHECK(item.b.empty());
@@ -56,37 +56,50 @@ TEST_CASE("MultiDimensionalArray with custom struct", "[multidimensionalarray][t
 
 TEST_CASE("MultiDimensionalArray Constructors and Basic Properties", "[MultiDimensionalArray]") {
     SECTION("Constructor with std::vector<size_t>") {
-        MultiDimensionalArray<int> arr1({5});
+        MultiDimensionalArray<int, true> arr1({5});
         REQUIRE(arr1.size() == 5);
         REQUIRE(arr1.dimensions() == std::vector<size_t>{5});
 
-        MultiDimensionalArray<double> arr2({2, 3});
+        MultiDimensionalArray<double, true> arr2({2, 3});
         REQUIRE(arr2.size() == 6);
         REQUIRE(arr2.dimensions() == std::vector<size_t>{2, 3});
 
-        MultiDimensionalArray<float> arr3({2, 3, 4});
+        MultiDimensionalArray<float, true> arr3({2, 3, 4});
         REQUIRE(arr3.size() == 24);
         REQUIRE(arr3.dimensions() == std::vector<size_t>{2, 3, 4});
     }
 
     SECTION("Constructor with n and dimension") {
-        MultiDimensionalArray<int> arr1(5, 1);
+        MultiDimensionalArray<int, false> arr1(1, 5);
         REQUIRE(arr1.size() == 5);
-        REQUIRE(arr1.dimensions() == std::vector<size_t>{5});
+        REQUIRE(arr1.numCoordinatePlaces() == 1);
+        REQUIRE(arr1.dimensionPerCoordinate() == 5);
 
-        MultiDimensionalArray<double> arr2(2, 2);
+        MultiDimensionalArray<double, false> arr2(2, 2);
         REQUIRE(arr2.size() == 4);
-        REQUIRE(arr2.dimensions() == std::vector<size_t>{2, 2});
+        REQUIRE(arr2.numCoordinatePlaces() == 2);
+        REQUIRE(arr2.dimensionPerCoordinate() == 2);
 
-        MultiDimensionalArray<float> arr3(3, 3);
+        MultiDimensionalArray<float, false> arr3(3, 3);
         REQUIRE(arr3.size() == 27);
-        REQUIRE(arr3.dimensions() == std::vector<size_t>{3, 3, 3});
+        REQUIRE(arr3.numCoordinatePlaces() == 3);
+        REQUIRE(arr3.dimensionPerCoordinate() == 3);
+
+        MultiDimensionalArray<float, false> arr4(3, 4);
+        REQUIRE(arr4.size() == 64);
+        REQUIRE(arr4.numCoordinatePlaces() == 3);
+        REQUIRE(arr4.dimensionPerCoordinate() == 4);
+
+        MultiDimensionalArray<float, false> arr5(4, 3);
+        REQUIRE(arr5.size() == 81);
+        REQUIRE(arr5.numCoordinatePlaces() == 4);
+        REQUIRE(arr5.dimensionPerCoordinate() == 3);
     }
 }
 
 TEST_CASE("MultiDimensionalArray Element Access and Exceptions", "[MultiDimensionalArray]") {
     SECTION("Valid element access") {
-        MultiDimensionalArray<int> arr({2, 3, 4});
+        MultiDimensionalArray<int, true> arr({2, 3, 4});
 
         // Set values
         arr({0, 0, 0}) = 1;
@@ -98,7 +111,7 @@ TEST_CASE("MultiDimensionalArray Element Access and Exceptions", "[MultiDimensio
     }
 
     SECTION("Out of bounds access throws std::out_of_range") {
-        MultiDimensionalArray<int> arr({2, 3, 4});
+        MultiDimensionalArray<int, true> arr({2, 3, 4});
 
         // Coordinates are too large
         REQUIRE_THROWS_AS(arr({2, 0, 0}), std::out_of_range);
@@ -110,7 +123,7 @@ TEST_CASE("MultiDimensionalArray Element Access and Exceptions", "[MultiDimensio
     }
 
     SECTION("Coordinate size mismatch throws std::invalid_argument") {
-        MultiDimensionalArray<int> arr({2, 3, 4});
+        MultiDimensionalArray<int, true> arr({2, 3, 4});
 
         // Too few coordinates
         REQUIRE_THROWS_AS(arr({0, 0}), std::invalid_argument);
@@ -121,7 +134,7 @@ TEST_CASE("MultiDimensionalArray Element Access and Exceptions", "[MultiDimensio
 }
 
 TEST_CASE("MultiDimensionalArray Iterator Functionality", "[MultiDimensionalArray]") {
-    MultiDimensionalArray<int> arr({2, 3});
+    MultiDimensionalArray<int, true> arr({2, 3});
     int counter = 0;
     // Initialize array with values 0, 1, 2, 3, 4, 5
     for (size_t i = 0; i < 2; ++i) {
@@ -188,13 +201,13 @@ TEST_CASE("MultiDimensionalArray Iterator Functionality", "[MultiDimensionalArra
 }
 
 TEST_CASE("MultiDimensionalArray Const Correctness", "[MultiDimensionalArray]") {
-    MultiDimensionalArray<int> arr({2, 2});
+    MultiDimensionalArray<int, true> arr({2, 2});
     arr({0, 0}) = 1;
     arr({0, 1}) = 2;
     arr({1, 0}) = 3;
     arr({1, 1}) = 4;
 
-    const MultiDimensionalArray<int>& constRef = arr;
+    const MultiDimensionalArray<int, true>& constRef = arr;
 
     SECTION("Const operator()") {
         REQUIRE(constRef({0, 0}) == 1);

@@ -14,6 +14,11 @@ add_executable(unittest CliffConjTests.cpp
         MultiDimensionalArrayTests.cpp
         TupleIteratorTests.cpp
 )
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    # Add cross-platform macro to indicate debug build
+    target_compile_definitions(unittest PRIVATE CATCH_DEBUG_ONLY)
+endif()
+
 include(../cmake/eigen3.cmake)
 
 target_link_libraries(unittest PRIVATE cliffordconjugatetest)

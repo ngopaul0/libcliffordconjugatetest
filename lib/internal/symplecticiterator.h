@@ -3,7 +3,7 @@
 
 #include <Eigen/Dense>
 #include <array>
-#include <cstddef> // For size_t
+#include <cstddef>
 #include <iterator>
 
 #include "util.h"
@@ -29,7 +29,8 @@ inline Eigen::Matrix2i A(size_t f, size_t modulus) {
 /**
  * @class Sp1ZdMatrixIterator
  * @brief A forward iterator for iterating over all symplectic matrices in Sp(1, Z_d), d an odd
- * prime.
+ * prime. To use this class, create an instance of Sp1ZdMatrixRange and use it in a for-loop or
+ * manually iterate with begin() and end() methods.
  *
  * The iterator will internally over all 3-tuples of the form (x, y, z) where
  * 0 <= x < d + 1; 0 <= y < d, 0 <= z < d - 1.
@@ -43,6 +44,9 @@ inline Eigen::Matrix2i A(size_t f, size_t modulus) {
  *
  * There are d + 1 matrices in ( {I} union B * [[0, 1],[-1,0]), d matrices in B, and d - 1 matrices
  * in A.
+ *
+ * Matrices returned by this iterator should be copied if wanting to use them outside of the
+ * iterator scope.
  */
 class Sp1ZdMatrixIterator {
   public:
@@ -57,27 +61,23 @@ class Sp1ZdMatrixIterator {
      * @brief Constructor for the beginning iterator (begin()).
      * @param d The prime modulus of Z_d.
      */
-    explicit Sp1ZdMatrixIterator(size_t d) : modulus_(d), current_tuple_({0, 0, 0}) {
-        setCurrentMatrix();
-    }
+    explicit Sp1ZdMatrixIterator(size_t d) : modulus_(d), current_tuple_({0, 0, 0}) {}
 
     /**
-     * @brief Returns a beginning iterator for the current modulus.
-     * @return An iterator pointing to the first symplectic transformation
+     * @brief Private constructor to create a specific end iterator state.
+     *
+     * @param d The modulus of Z_d.
+     * @param isEnd Where to create an end iterator.
      */
-    [[nodiscard]] Sp1ZdMatrixIterator begin() const { return Sp1ZdMatrixIterator(modulus_); }
-
-    /**
-     * @brief Returns an end iterator for the current modulus.
-     * @return An iterator pointing to one past the last symplectic transformation
-     */
-    [[nodiscard]] Sp1ZdMatrixIterator end() const {
+    Sp1ZdMatrixIterator(size_t d, bool isEnd)
+        : modulus_(d), current_tuple_({isEnd ? modulus_ + 1 : 0, 0, 0}) {
         // The sentinel is for the first tuple element, x, which ranges from 0 <= d < d + 1.
-        // So use d + 1 as that's an exclusive bound.
-        return {modulus_, modulus_ + 1};
+        // So use modulus_ + 1 as that's an exclusive bound.
     }
 
-    void reset() { current_tuple_ = {0, 0, 0}; }
+    [[nodiscard]] bool isEnd() const {
+        return current_tuple_[0] == modulus_ + 1;
+    }
 
     // --- Operators ---
 
@@ -88,7 +88,7 @@ class Sp1ZdMatrixIterator {
      * @return A reference to the incremented iterator.
      */
     Sp1ZdMatrixIterator& operator++() {
-        if (modulus_ == 0) {
+        if (modulus_ == 0 || isEnd()) {
             return *this;
         }
 
@@ -124,14 +124,15 @@ class Sp1ZdMatrixIterator {
      *
      * @return A reference to the current symplectic matrix
      */
-    reference operator*() { return current_matrix_; }
-
-    /**
-     * @brief Member access operator.
-     *
-     * @return A pointer to the current symplectic matrix.
-     */
-    pointer operator->() { return &current_matrix_; }
+    const reference operator*() {
+        if (isEnd()) {
+            throw std::out_of_range("Sp1ZdMatrixIterator end reached");
+        }
+        if (!current_matrix_.has_value()) {
+            setCurrentMatrix();
+        }
+        return current_matrix_.value();
+    }
 
     /**
      * @brief Equality comparison operator.
@@ -154,19 +155,15 @@ class Sp1ZdMatrixIterator {
 
   private:
     size_t modulus_;
-    value_type current_matrix_;
+    std::optional<value_type> current_matrix_;
     std::array<size_t, 3> current_tuple_;
 
-    /**
-     * @brief Private constructor to create a specific end iterator state.
-     *
-     * @param d The modulus of Z_d.
-     * @param sentinel_value A value to indicate the end state on the first element of the tuple.
-     */
-    Sp1ZdMatrixIterator(size_t d, size_t sentinel_value)
-        : modulus_(d), current_tuple_({sentinel_value, 0, 0}) {}
-
     void setCurrentMatrix() {
+        if (isEnd()) {
+            current_matrix_ = std::nullopt;
+            return;
+        }
+
         Eigen::Matrix2i firstMatrix;
         // The first tuple element, x, ranges from 0 <= x < d + 1, because the first value x = 0
         // represents the identity element. The rest represents the d possible matrices of the
@@ -191,7 +188,31 @@ class Sp1ZdMatrixIterator {
 
         result = result.array().unaryExpr(
             [&](const int x) { return static_cast<int>(safeMod(x, modulus_)); });
-        current_matrix_ = result;
+        current_matrix_ = std::make_optional(result);
+    }
+};
+
+/**
+ * Helper class for Sp1ZdMatrixIterator so that extra state (current_matrix_, current_tuple_) is not
+ * stored until actually iterating.
+ */
+class Sp1ZdMatrixRange {
+    size_t modulus_;
+
+  public:
+    explicit Sp1ZdMatrixRange(size_t modulus) : modulus_(modulus) {}
+    /**
+     * @brief Returns a beginning iterator for the current modulus.
+     * @return An iterator pointing to the first symplectic transformation
+     */
+    [[nodiscard]] Sp1ZdMatrixIterator begin() const { return Sp1ZdMatrixIterator(modulus_); }
+
+    /**
+     * @brief Returns an end iterator for the current modulus.
+     * @return An iterator pointing to one past the last symplectic transformation
+     */
+    [[nodiscard]] Sp1ZdMatrixIterator end() const {
+        return {modulus_, true};
     }
 };
 

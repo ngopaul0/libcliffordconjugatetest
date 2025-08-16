@@ -14,7 +14,7 @@ class Sp1ZdGates {
 
   public:
     explicit Sp1ZdGates(size_t d) {
-        Sp1ZdMatrixIterator iterator(d);
+        Sp1ZdMatrixRange iterator(d);
         gates.reserve(d * d * d - d);
         for (const auto& g : iterator) {
             gates.push_back(g);
@@ -103,7 +103,7 @@ BruteForceReturnType<IsReturningInfo> bruteForceTestCliffordConjugacy(
             for (size_t qPrime = 0; qPrime < d; qPrime++) {
                 // Use an iterator to avoid storing all the matrices in memory. The iterator
                 // is efficient as it's just multiplying 2x2 matrices (constant-time).
-                auto gateIterator = Sp1ZdMatrixIterator(d);
+                auto gateIterator = Sp1ZdMatrixRange(d);
                 for (const auto& gate : gateIterator) {
                     if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p, Mprime_p,
                                                          gate)) {

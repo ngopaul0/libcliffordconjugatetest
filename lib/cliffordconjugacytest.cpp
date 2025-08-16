@@ -2,6 +2,7 @@
 
 #include <complex>
 #include <iostream>
+#include <omp.h>
 #include "internal/absvalmap.h"
 #include "internal/bruteforcetest.h"
 #include "internal/util.h"
@@ -145,6 +146,7 @@ bool validateNecessaryCondFromLinDepPoints(const Eigen::Index d, const std::comp
     // itself.
     return true;
 }
+
 bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                          const Eigen::Ref<const Eigen::MatrixXcd>& M_prime) {
     if (M.rows() != M.cols() || M_prime.rows() != M_prime.cols() || M_prime.cols() != M.cols()) {
@@ -177,14 +179,50 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     AbsValMap histogramM(5);
     Eigen::MatrixXcd M_p = Eigen::MatrixXcd::Zero(d, d);
     bool allEqual = true;
-    for (size_t p = 0; p < d; p++) {
-        for (size_t q = 0; q < d; q++) {
-            if (allEqual && !isApproxEqual(M(p, q), M_prime(p, q))) {
-                allEqual = false;
+
+    //thread_local AbsValMap localM(5);
+    //localM.getMap().clear();
+
+    std::unordered_map<int, AbsValMap> thread_maps;
+
+    //#pragma omp parallel for collapse(2)
+    #pragma omp parallel
+    {
+        // Each thread gets its own ID
+        int thread_id = omp_get_thread_num();
+        // This thread's local map
+        // AbsValMap& local_map = thread_maps[thread_id];
+        AbsValMap* local_map_ptr;
+        #pragma omp critical
+        {
+            local_map_ptr = &thread_maps[thread_id];
+        }
+
+        for (size_t p = 0; p < d; p++) {
+            for (size_t q = 0; q < d; q++) {
+                if (allEqual && !isApproxEqual(M(p, q), M_prime(p, q))) {
+                    allEqual = false;
+                }
+                const auto value = f(M, p, q, inv2, omega);
+                M_p(p, q) = value;
+
+                local_map_ptr->insertEntry(p, q, value);
             }
-            const auto value = f(M, p, q, inv2, omega);
-            M_p(p, q) = value;
-            histogramM.insertEntry(p, q, value);
+        }
+
+        /*
+        #pragma omp critical
+        {
+            for (auto const& [key, val] : localM.getMap()) {
+                histogramM.getMap()[key] = val;
+            }
+        }
+        */
+    }
+
+    for (const auto& local_map : thread_maps | std::views::values) {
+        for (auto const& [key, val] : local_map.getMap()) {
+            histogramM.getMap()[key] = val;
         }
     }
 
@@ -290,7 +328,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
         // Pick a v with the least frequency
         const auto& key = firstNonZeroKey;
-        std::pair<size_t, size_t> v = histogramM.get(key).front();
+        const std::pair<size_t, size_t> v = histogramM.get(key).front();
 
         // alpha_v = f_M(v)
         const auto alpha = M_p(v.first, v.second);
@@ -387,84 +425,133 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     // Worst case: The mappings are split and these two nested loops have roughly around
     // (d^2 / 2) * (d^2 / 2) = O(d^4) iterations. But it's possible for most of these iterations to
     // exit early without reaching the O(d^2) check further inside.
-    for (const auto& uMap : possibleMappingsU) {
-        for (const auto& uPrimeMap : possibleMappingsUPrime) {
-            // This solves the equation S.[u u'] = [S(u) S(u')] for S, where u, u' are in Z_d^2
-            // and linearly independent. The linear independence allows us to deterministically
-            // recover S for this particular mapping pair.
 
-            const auto uPrimeDeterminant =
-                safeMod(u.first * uPrime.second - uPrime.first * u.second, d);
-            const auto uPrimeDetInverse = modInverse(uPrimeDeterminant, d);
-            // uUprimeDeterminantInv := (u[1]*uPrime[2] - uPrime[1]*u[2]) &^(-1) mod d
+    bool finalValue = false;
+    #pragma omp parallel
+    {
+        volatile bool condition_met = false;
 
-            // Scoord[1] := (uMap[1] * uPrime[2] - u[2] * uPrimeMap[1])*uUprimeDeterminantInv mod d;
-            const auto x0 = safeMod(
-                uPrimeDetInverse * (uMap.first * uPrime.second - u.second * uPrimeMap.first), d);
-            // Scoord[2] := (u[1] * uPrimeMap[1] - uMap[1] * uPrime[1])*uUprimeDeterminantInv mod d;
-            const auto x1 = safeMod(
-                uPrimeDetInverse * (u.first * uPrimeMap.first - uMap.first * uPrime.first), d);
-            // Scoord[3] := (uMap[2] * uPrime[2] - u[2] * uPrimeMap[2])*uUprimeDeterminantInv mod d;
-            const auto x2 = safeMod(
-                uPrimeDetInverse * (uMap.second * uPrime.second - u.second * uPrimeMap.second), d);
-            // Scoord[4] := (u[1] * uPrimeMap[2] - uMap[2] * uPrime[1])*uUprimeDeterminantInv mod d;
-            const auto x3 = safeMod(
-                uPrimeDetInverse * (u.first * uPrimeMap.second - uMap.second * uPrime.first), d);
-
-            if (isSymplecticTransformation(d, x0, x1, x2, x3)) {
-                // Let alpha_v = f_M(v) and beta_v = f_{M'}(v)
-                const auto alphaV = M_p(v.first, v.second);
-                const auto alphaVPrime = M_p(vPrime.first, vPrime.second);
-
-                const auto betaVCoord = applyTransformation(d, v, x0, x1, x2, x3);
-                const auto betaV = Mprime_p(betaVCoord.first, betaVCoord.second);
-                const auto betaVPrimeCoord = applyTransformation(d, vPrime, x0, x1, x2, x3);
-                const auto betaVPrime = Mprime_p(betaVPrimeCoord.first, betaVPrimeCoord.second);
-
-                // Try to find integer k such that alpha_v = omega^k beta_v
-                const double kTest = checkPhase(d, alphaV, betaV);
-                const double k = std::round(kTest);
-                if (std::abs(kTest - k) > 1e-5) {
-                    // too far from an integer
-                    continue;
+        #pragma omp for collapse(2)
+        for (const auto& uMap : possibleMappingsU) {
+            for (const auto& uPrimeMap : possibleMappingsUPrime) {
+                #pragma omp cancellation point for
+                if (condition_met) {
+                    #pragma omp cancel for
                 }
+                // This solves the equation S.[u u'] = [S(u) S(u')] for S, where u, u' are in Z_d^2
+                // and linearly independent. The linear independence allows us to deterministically
+                // recover S for this particular mapping pair.
 
-                // Try to find integer k' such that alpha'_v = omega^k' beta'_v
-                const double kPrimeTest = checkPhase(d, alphaVPrime, betaVPrime);
-                const double kPrime = std::round(kPrimeTest);
-                if (std::abs(kPrimeTest - kPrime) > 1e-5) {
-                    // too far from an integer
-                    continue;
-                }
+                const auto uPrimeDeterminant =
+                    safeMod(u.first * uPrime.second - uPrime.first * u.second, d);
+                const auto uPrimeDetInverse = modInverse(uPrimeDeterminant, d);
+                // uUprimeDeterminantInv := (u[1]*uPrime[2] - uPrime[1]*u[2]) &^(-1) mod d
 
-                // Via Lemma 10, we must have
-                //      alpha_v = omega^k beta_v = omega^[(p,q),(p',q')] beta_v
-                // and this gives us a linear (congruence) equation k = [v,(p',q')].
-                // Similarly, k' = [v',(p',q')]. As k, k', v and v' are known, this is a system of 2
-                // equations in 2 unknowns p' and q'
+                // Scoord[1] := (uMap[1] * uPrime[2] - u[2] * uPrimeMap[1])*uUprimeDeterminantInv mod d;
+                const auto x0 = safeMod(
+                    uPrimeDetInverse * (uMap.first * uPrime.second - u.second * uPrimeMap.first), d);
+                // Scoord[2] := (u[1] * uPrimeMap[1] - uMap[1] * uPrime[1])*uUprimeDeterminantInv mod d;
+                const auto x1 = safeMod(
+                    uPrimeDetInverse * (u.first * uPrimeMap.first - uMap.first * uPrime.first), d);
+                // Scoord[3] := (uMap[2] * uPrime[2] - u[2] * uPrimeMap[2])*uUprimeDeterminantInv mod d;
+                const auto x2 = safeMod(
+                    uPrimeDetInverse * (uMap.second * uPrime.second - u.second * uPrimeMap.second), d);
+                // Scoord[4] := (u[1] * uPrimeMap[2] - uMap[2] * uPrime[1])*uUprimeDeterminantInv mod d;
+                const auto x3 = safeMod(
+                    uPrimeDetInverse * (u.first * uPrimeMap.second - uMap.second * uPrime.first), d);
 
-                // inverseToUse := (v[1] * vPrime[2] - v[2]*vPrime[1])&^(-1) mod d;
-                // pPrimeFromThis := (possibleK*vPrime[1] - possibleKPrime*v[1])*inverseToUse mod d;
-                // qPrimeFromThis := (possibleK*vPrime[2] - possibleKPrime*v[2])*inverseToUse mod d;
-                const auto inverseToUse = modInverse(
-                    safeMod(v.first * vPrime.second - v.second * vPrime.first, d), d);
-                const auto pPrime =
-                    safeMod(inverseToUse * (k * vPrime.first - kPrime * v.first), d);
-                const auto qPrime =
-                    safeMod(inverseToUse * (k * vPrime.second - kPrime * v.second), d);
+                if (isSymplecticTransformation(d, x0, x1, x2, x3)) {
+                    // Let alpha_v = f_M(v) and beta_v = f_{M'}(v)
+                    const auto alphaV = M_p(v.first, v.second);
+                    const auto alphaVPrime = M_p(vPrime.first, vPrime.second);
 
-                Eigen::Matrix2i S;
-                S << x0, x1, x2, x3;
-                // Verify this works for all p, q
-                // Check is worst-case O(d^2), but it will exit quickly if it finds a bad value
-                if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p, Mprime_p, S)) {
-                    return true;
+                    const auto betaVCoord = applyTransformation(d, v, x0, x1, x2, x3);
+                    const auto betaV = Mprime_p(betaVCoord.first, betaVCoord.second);
+                    const auto betaVPrimeCoord = applyTransformation(d, vPrime, x0, x1, x2, x3);
+                    const auto betaVPrime = Mprime_p(betaVPrimeCoord.first, betaVPrimeCoord.second);
+
+                    // Try to find integer k such that alpha_v = omega^k beta_v
+                    const double kTest = checkPhase(d, alphaV, betaV);
+                    const double k = std::round(kTest);
+                    if (std::abs(kTest - k) > 1e-5) {
+                        // too far from an integer
+                        continue;
+                    }
+
+                    // Try to find integer k' such that alpha'_v = omega^k' beta'_v
+                    const double kPrimeTest = checkPhase(d, alphaVPrime, betaVPrime);
+                    const double kPrime = std::round(kPrimeTest);
+                    if (std::abs(kPrimeTest - kPrime) > 1e-5) {
+                        // too far from an integer
+                        continue;
+                    }
+                    if (condition_met) {
+                        #pragma omp cancel for
+                    }
+
+                    // Via Lemma 10, we must have
+                    //      alpha_v = omega^k beta_v = omega^[(p,q),(p',q')] beta_v
+                    // and this gives us a linear (congruence) equation k = [v,(p',q')].
+                    // Similarly, k' = [v',(p',q')]. As k, k', v and v' are known, this is a system of 2
+                    // equations in 2 unknowns p' and q'
+
+                    // inverseToUse := (v[1] * vPrime[2] - v[2]*vPrime[1])&^(-1) mod d;
+                    // pPrimeFromThis := (possibleK*vPrime[1] - possibleKPrime*v[1])*inverseToUse mod d;
+                    // qPrimeFromThis := (possibleK*vPrime[2] - possibleKPrime*v[2])*inverseToUse mod d;
+                    const auto inverseToUse = modInverse(
+                        safeMod(v.first * vPrime.second - v.second * vPrime.first, d), d);
+                    const auto pPrime =
+                        safeMod(inverseToUse * (k * vPrime.first - kPrime * v.first), d);
+                    const auto qPrime =
+                        safeMod(inverseToUse * (k * vPrime.second - kPrime * v.second), d);
+
+                    Eigen::Matrix2i S;
+                    S << x0, x1, x2, x3;
+                    // Verify this works for all p, q
+                    // Check is worst-case O(d^2), but it will exit quickly if it finds a bad value
+                    #pragma omp cancellation point for
+
+                    bool foundBadValue = false;
+                    for (size_t p = 0; p < d; p++) {
+                        for (size_t q = 0; q < d; q++) {
+                            #pragma omp cancellation point for
+                            // it's likely the compiler will optimize this due to Eigen's expression templates
+                            const Eigen::Vector2i v(p, q);
+                            const Eigen::Vector2i vPrime = S * v;
+                            const auto fM = M_p(p, q);
+                            const auto fMPrime = Mprime_p(safeMod(vPrime(0), d), safeMod(vPrime(1), d));
+                            const auto omegaTerm = std::pow(omega, symplecticProduct(d, p, q, pPrime, qPrime));
+
+                            if (!isApproxEqual(fM, omegaTerm * fMPrime)) {
+                                foundBadValue = true;
+                                break;
+                            }
+                        }
+                        if (foundBadValue) {
+                            break;
+                        }
+                    }
+
+
+                    if (!foundBadValue) {
+                        // Signal that the loop should be canceled
+                        condition_met = true;
+                        #pragma omp cancel for
+                        // return true;
+                    }
+
                 }
             }
         }
+
+        #pragma omp critical
+        {
+            if (condition_met)
+                finalValue = true;
+        }
     }
 
-    return false;
+    return finalValue;
 }
 
 } // namespace cliffconjtest

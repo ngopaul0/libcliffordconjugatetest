@@ -198,6 +198,32 @@ TEST_CASE("MultiDimensionalArray Iterator Functionality", "[MultiDimensionalArra
         REQUIRE(it2 >= it1);
         REQUIRE(it3 >= it1);
     }
+
+    SECTION("Iterates in order") {
+        const std::vector<size_t> dims = {3, 4, 5};
+        auto A = MultiDimensionalArray<std::vector<size_t>, true>({3, 4, 5});
+        REQUIRE(A.numCoordinatePlaces() == 3);
+        REQUIRE(A.dimensions() == dims);
+
+        auto it = A.begin();
+        for (size_t a = 0; a < 3; a++) {
+            for (size_t b = 0; b < 4; b++) {
+                for (size_t c = 0; c < 5; c++) {
+                    *it = {a, b, c};
+                    ++it;
+                }
+            }
+        }
+
+        for (size_t a = 0; a < 3; a++) {
+            for (size_t b = 0; b < 4; b++) {
+                for (size_t c = 0; c < 5; c++) {
+                    const std::vector coords = {a,b,c};
+                    REQUIRE(A({a, b, c}) == coords);
+                }
+            }
+        }
+    }
 }
 
 TEST_CASE("MultiDimensionalArray Const Correctness", "[MultiDimensionalArray]") {

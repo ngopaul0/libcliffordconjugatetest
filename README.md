@@ -1,5 +1,11 @@
 # Build instructions
 
+## Prerequisites
+
+On Ubuntu, you can install `libeigen3-dev`, but the build system will clone and build Eigen if you don't have it.
+
+If using clang, install `libomp-dev` (for Ubuntu) for OpenMP support.
+
 ## Initializing
 
 Initialize the CMake build directory:

@@ -3,6 +3,7 @@
 #include <Eigen/Dense>
 #include <complex>
 #include <vector>
+#include <variant>
 
 #include "conjtestlemma10.h"
 #include "symplecticiterator.h"
@@ -124,8 +125,8 @@ BruteForceReturnType<IsReturningInfo> bruteForceTestCliffordConjugacy(
     omp_init_lock(&result_lock);
 
     #pragma omp parallel for collapse(2) shared(result, result_lock) schedule(dynamic)
-    for (size_t pPrime = 0; pPrime < d; pPrime++) {
-        for (size_t qPrime = 0; qPrime < d; qPrime++) {
+    for (long pPrime = 0; pPrime < d; pPrime++) {
+        for (long qPrime = 0; qPrime < d; qPrime++) {
             if (result.has_value()) {
                 continue;
             }

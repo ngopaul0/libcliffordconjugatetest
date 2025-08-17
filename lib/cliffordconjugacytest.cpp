@@ -238,7 +238,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     }
 
     // Sort the keys by the number of coordinates associated with each key.
-    auto sortedKeysM = histogramM.sortedKeys();
+    const auto sortedKeysM = histogramM.sortedKeys();
 
     double firstNonZeroKey = 0.0;
     for (const double& key : sortedKeysM) {
@@ -254,7 +254,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
     std::optional<std::pair<size_t, size_t>> nonZeroCoordOpt = std::nullopt;
     {
-        const auto coords = histogramM.get(firstNonZeroKey);
+        const auto& coords = histogramM.get(firstNonZeroKey);
         for (const auto& coord : coords) {
             if (coord.first != 0 || coord.second != 0) {
                 nonZeroCoordOpt = std::make_optional(coord);
@@ -265,7 +265,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     if (!nonZeroCoordOpt.has_value()) {
         throw std::invalid_argument("Missing nonzero coords");
     }
-    const auto nonZeroCoord = nonZeroCoordOpt.value();
+    const auto& nonZeroCoord = nonZeroCoordOpt.value();
 
     // Find a linearly dependent pair. If this doesn't yield a value, then every nonzero coordinate
     // is on a line.
@@ -290,7 +290,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
         // Pick a v with the least frequency
         const auto& key = firstNonZeroKey;
-        std::pair<size_t, size_t> v = histogramM.get(key).front();
+        const std::pair<size_t, size_t>& v = histogramM.get(key).front();
 
         // alpha_v = f_M(v)
         const auto alpha = M_p(v.first, v.second);
@@ -302,7 +302,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
         // TODO: Refactor
         for (const auto& u : possibleU) {
             // For each beta_u with the same absolute value
-            const auto beta = Mprime_p(u.first, u.second);
+            const auto& beta = Mprime_p(u.first, u.second);
             // Try to find integer k such that alpha_v = omega^k beta_u
             const double kTest = checkPhase(d, alpha, beta);
             const size_t k = std::round(kTest);
@@ -354,13 +354,13 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
         return false;
     }
     const auto linIndepKey = linIndepCoordOpt.value().first;
-    const auto linIndepCoord = linIndepCoordOpt.value().second;
+    const auto& linIndepCoord = linIndepCoordOpt.value().second;
 
     // v and v' are linearly independent
     const auto vKey = firstNonZeroKey;
-    const auto v = nonZeroCoord;
+    const auto& v = nonZeroCoord;
     const auto vPrimeKey = linIndepKey;
-    const auto vPrime = linIndepCoord;
+    const auto& vPrime = linIndepCoord;
 
     // Choose u and u' so that the frequencies histogramM(|u|) and histogramM(|u'|) are minimized.
     // sortedKeysM is sorted for this in increasing order, so just iterate from start.
@@ -381,8 +381,8 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
     // Get all possible places the permutation S could have sent u and u' to.
     // Then since u and u' are linearly independent, try to recover S from this info.
-    const auto possibleMappingsU = histogramMprime.get(uKey);
-    const auto possibleMappingsUPrime = histogramMprime.get(uPrimeKey);
+    const auto& possibleMappingsU = histogramMprime.get(uKey);
+    const auto& possibleMappingsUPrime = histogramMprime.get(uPrimeKey);
 
     // Worst case: The mappings are split and these two nested loops have roughly around
     // (d^2 / 2) * (d^2 / 2) = O(d^4) iterations. But it's possible for most of these iterations to
@@ -413,13 +413,13 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
             if (isSymplecticTransformation(d, x0, x1, x2, x3)) {
                 // Let alpha_v = f_M(v) and beta_v = f_{M'}(v)
-                const auto alphaV = M_p(v.first, v.second);
-                const auto alphaVPrime = M_p(vPrime.first, vPrime.second);
+                const auto& alphaV = M_p(v.first, v.second);
+                const auto& alphaVPrime = M_p(vPrime.first, vPrime.second);
 
-                const auto betaVCoord = applyTransformation(d, v, x0, x1, x2, x3);
-                const auto betaV = Mprime_p(betaVCoord.first, betaVCoord.second);
-                const auto betaVPrimeCoord = applyTransformation(d, vPrime, x0, x1, x2, x3);
-                const auto betaVPrime = Mprime_p(betaVPrimeCoord.first, betaVPrimeCoord.second);
+                const auto& betaVCoord = applyTransformation(d, v, x0, x1, x2, x3);
+                const auto& betaV = Mprime_p(betaVCoord.first, betaVCoord.second);
+                const auto& betaVPrimeCoord = applyTransformation(d, vPrime, x0, x1, x2, x3);
+                const auto& betaVPrime = Mprime_p(betaVPrimeCoord.first, betaVPrimeCoord.second);
 
                 // Try to find integer k such that alpha_v = omega^k beta_v
                 const double kTest = checkPhase(d, alphaV, betaV);

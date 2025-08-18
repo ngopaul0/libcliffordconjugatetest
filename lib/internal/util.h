@@ -213,6 +213,10 @@ size_t reduceToREFAndGetRank(MatrixType& A, const int p, bool shouldReduce = fal
         for (int i = pivotRow + 1; i < rows; i++) {
             if (i != pivotRow) {
                 long long factor = A(i, pivotCol);
+                if (factor == 0) {
+                    continue;
+                }
+                // Everything to the left of the pivotCol has been reduced already.
                 for (int j = pivotCol; j < cols; j++) {
                     long long subtractTerm = factor * A(pivotRow, j) % p;
                     A(i, j) = safeMod(A(i, j) - subtractTerm, p);
@@ -251,6 +255,10 @@ size_t reduceToREFAndGetRank(MatrixType& A, const int p, bool shouldReduce = fal
             for (int i = 0; i < pivotRow; i++) {
 
                 long long factor = A(i, pivotCol); // divided by A(pivotRow, pivotCol)
+                if (factor == 0) {
+                    continue;
+                }
+                // Since we're in REF, there are only 0s to the left of the current pivotCol
                 for (int j = pivotCol; j < cols; j++) {
                     long long subtractTerm = safeMod(factor * A(pivotRow, j), p);
                     A(i, j) = safeMod(A(i, j) - subtractTerm, p);

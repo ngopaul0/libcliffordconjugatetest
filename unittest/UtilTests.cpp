@@ -183,6 +183,30 @@ TEST_CASE("reduceToREFAndGetRank", "[REF]") {
         REQUIRE(rank == 1);
         REQUIRE(A == (expectedRef));
     }
+
+    // Sparse example for vectorisation-based algorithm
+    SECTION("Tallish matrix (6x5)") {
+        const size_t p = 5;
+        Eigen::MatrixXi A(6, 5);
+        A << 1, 0, 3, 0, 1,
+               0, 1, 0, 3, 2,
+               0, 0, 0, 0, 0,
+               0, 0, 0, 0, 0,
+               3, 0, 4, 0, 3,
+               0, 3, 0, 4, 1;
+
+        size_t rank = reduceToREFAndGetRank(A, p, true);
+        Eigen::MatrixXi expectedRef(6, 5);
+        expectedRef << 1, 0, 3, 0, 1,
+               0, 1, 0, 3, 2,
+               0, 0, 0, 0, 0,
+               0, 0, 0, 0, 0,
+               0, 0, 0, 0, 0,
+               0, 0, 0, 0, 0;
+
+        CHECK(rank == 2);
+        REQUIRE(A == (expectedRef));
+    }
 }
 
 TEST_CASE("check_phase", "[check_phase]") {

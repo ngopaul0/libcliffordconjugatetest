@@ -7,8 +7,11 @@
 #include <random>
 #include <vector>
 
+#include <unsupported/Eigen/KroneckerProduct>
 #include "catch2/matchers/catch_matchers.hpp"
 #include "catch2/matchers/catch_matchers_floating_point.hpp"
+
+#include "internal/tupleiterator.h"
 
 using namespace cliffconjtest;
 
@@ -350,6 +353,50 @@ TEST_CASE("f function", "[f]") {
         CHECK_THAT(optimizedResult.imag(), Catch::Matchers::WithinAbs(2.23742266, 1e-5));
     }
 
+    SECTION("f_multiqudit works on known result for 2 qubits") {
+        constexpr std::complex<double> complexFor2ndTuple = {-1, 3};
+        const Eigen::MatrixXcd M = Eigen::kroneckerProduct(
+            W(d, 1, 2, inv_2, omega),
+            W(d, 0, 1, inv_2, omega)) + complexFor2ndTuple * Eigen::kroneckerProduct(
+                W(d, 0,0, inv_2, omega),
+                W(d, 1,2, inv_2, omega));
+
+        const std::vector<size_t> nonZeroTuple = {1,2,0,1};
+        const std::vector<size_t> nonZeroTuple2 = {0, 0, 1, 2};
+        for (const auto& tuple : TupleIterator<SingleModulus>(d, 4)) {
+            auto fValue = f_multiqudit(M, {{tuple[0],tuple[1]}, {tuple[2],tuple[3]}}, d, inv_2, omega);
+            INFO("Tuple is " << tuple[0] << ", " << tuple[1] << ", " << tuple[2] << ", " << tuple[3]);
+            // f_M should be the expected values in the basis elements specified, and 0 everywhere else
+            if (tuple == nonZeroTuple) {
+                CHECK_THAT(fValue.imag(), Catch::Matchers::WithinAbs(0, 1e-5));
+                CHECK_THAT(fValue.real(), Catch::Matchers::WithinAbs(1, 1e-5));
+            } else if (tuple == nonZeroTuple2) {
+                CHECK_THAT(fValue.imag(), Catch::Matchers::WithinAbs(complexFor2ndTuple.imag(), 1e-5));
+                CHECK_THAT(fValue.real(), Catch::Matchers::WithinAbs(complexFor2ndTuple.real(), 1e-5));
+            } else {
+                CHECK_THAT(fValue.real(), Catch::Matchers::WithinAbs(0, 1e-5));
+                CHECK_THAT(fValue.real(), Catch::Matchers::WithinAbs(0, 1e-5));
+            }
+        }
+    }
+
+    SECTION("f_multiqudit works on original 1-qubit case") {
+        CHECK((2 * inv_2) % d == 1);
+        Eigen::Matrix3cd U;
+        U << std::complex(-5.57693, -0.765222), std::complex(6.22008, -8.91947),
+            std::complex(-0.637812, 0.571667), std::complex(-0.0336533, -1.70245),
+            std::complex(7.87921, 3.40459), std::complex(-5.09563, -1.66903),
+            std::complex(-8.89951, 2.14251), std::complex(0.366395, 0.542691),
+            std::complex(-0.816918, 4.0729);
+        auto naiveResult = fNaive(U, 0, 0, inv_2, omega);
+        CHECK_THAT(naiveResult.real(), Catch::Matchers::WithinAbs(0.4951206666, 1e-5));
+        CHECK_THAT(naiveResult.imag(), Catch::Matchers::WithinAbs(2.23742266, 1e-5));
+
+        auto optimizedResult = f_multiqudit(U, {{0,0}}, d, inv_2, omega);
+        CHECK_THAT(optimizedResult.real(), Catch::Matchers::WithinAbs(0.4951206666, 1e-5));
+        CHECK_THAT(optimizedResult.imag(), Catch::Matchers::WithinAbs(2.23742266, 1e-5));
+    }
+
     SECTION("Optimized f equivalent to naive approach") {
 
         size_t num_iterations = 500;
@@ -359,10 +406,31 @@ TEST_CASE("f function", "[f]") {
                 for (int q = 0; q < d; ++q) {
 
                     INFO("Iteration " << i << " p " << p << " q " << q << ", U = " << U);
-                    REQUIRE_THAT(fNaive(U, p, q, inv_2, omega).imag(),
-                                 Catch::Matchers::WithinAbs(f(U, p, q, inv_2, omega).imag(), 1e-9));
-                    REQUIRE_THAT(fNaive(U, p, q, inv_2, omega).real(),
-                                 Catch::Matchers::WithinAbs(f(U, p, q, inv_2, omega).real(), 1e-9));
+                    auto naiveValue = fNaive(U, p, q, inv_2, omega);
+                    auto optimizedValue = f(U, p, q, inv_2, omega);
+                    REQUIRE_THAT(naiveValue.imag(),
+                                 Catch::Matchers::WithinAbs(optimizedValue.imag(), 1e-9));
+                    REQUIRE_THAT(naiveValue.real(),
+                                 Catch::Matchers::WithinAbs(optimizedValue.real(), 1e-9));
+                }
+            }
+        }
+    }
+
+    SECTION("f_multiqudit equivalent to naive approach for 1 qudit") {
+        size_t num_iterations = 500;
+        for (size_t i = 0; i < num_iterations; ++i) {
+            auto U = create_random_matrix(d);
+            for (int p = 0; p < d; ++p) {
+                for (int q = 0; q < d; ++q) {
+
+                    INFO("Iteration " << i << " p " << p << " q " << q << ", U = " << U);
+                    auto naiveValue = fNaive(U, p, q, inv_2, omega);
+                    auto optimizedValue = f_multiqudit(U, {{p, q}}, d, inv_2, omega);
+                    REQUIRE_THAT(naiveValue.imag(),
+                                 Catch::Matchers::WithinAbs(optimizedValue.imag(), 1e-9));
+                    REQUIRE_THAT(naiveValue.real(),
+                                 Catch::Matchers::WithinAbs(optimizedValue.real(), 1e-9));
                 }
             }
         }

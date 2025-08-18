@@ -170,11 +170,30 @@ std::complex<double> f(const Eigen::Ref<const Eigen::MatrixXcd>& M, int p, int q
                        const std::complex<double>& omega);
 
 /**
+ * @brief For a given d^n x d^n matrix M (d prime), it can be decomposed into a linear combination of
+ * the d^(2n) Pauli basis elements W(p1,q1) ⊗ ... ⊗ W(pn,qn), where pi,qi are integers from 0 to
+ * d - 1. This function gets the coefficient of W(p1,q1) ⊗ ... ⊗ W(pn,qn) in the Pauli basis
+ * decomposition of M.
+ *
+ * The W() function together with Eigen::kroneckerProduct can be used to form Pauli basis elements
+ *
+ * @param M A d x d complex matrix, where d is prime
+ * @param pq_vec Pauli basis element coordinates
+ * @param d Odd prime d
+ * @param inv_2 The modular multiplicative inverse of 2 modulo d.
+ * @param omega The complex root of unity (e.g., std::exp(std::complex<double>(0, 2 * M_PI / d))).
+ * @return the coefficient of W(p1,q1) ⊗ ... ⊗ W(pn,qn) in the Pauli basis decomposition of M.
+ */
+std::complex<double> f_multiqudit(const Eigen::Ref<const Eigen::MatrixXcd>& M,
+                                  const std::vector<std::pair<size_t, size_t>>& pq_vec, size_t d,
+                                  int inv_2, const std::complex<double>& omega);
+
+/**
  * Reduces the matrix A (over Z_p) to REF and returns the rank of A
  * @tparam MatrixType An Eigen integer matrix type like Matrix2i or MatrixXi
  * @param A The matrix over Z_p to reduce to row echelon form (REF). Matrix will be modified.
  * @param p The prime modulus
- * @param shouldReduce Whether do
+ * @param shouldReduce Whether to return RREF
  * @return The rank of A
  */
 template <typename MatrixType>

@@ -42,8 +42,7 @@ Eigen::MatrixXcd makeZX(int d, int zExponent, int xExponent) {
 
     for (int i = 0; i < d; i++) {
         int permutedRow = safeMod(i + xExponent, d);
-        Z(permutedRow, i) =
-            std::exp(std::complex(0.0, permutedRow * 2.0 * pi * zExponent / d));
+        Z(permutedRow, i) = std::exp(std::complex(0.0, permutedRow * 2.0 * pi * zExponent / d));
     }
     return Z;
 }
@@ -79,31 +78,77 @@ std::complex<double> f(const Eigen::Ref<const Eigen::MatrixXcd>& M, int p, int q
     }
     const auto d = M.rows();
 
-    // C++ is 0-indexed, so we loop from 0 to d-1.
     std::complex sumTemp = 0.0;
 
-    // The first omega term in the Maple function's sum is constant for the loop,
-    // so we can calculate it once outside the loop for efficiency.
     int outer_omega_exponent = safeMod(-inv_2 * p * q, d);
     std::complex<double> outer_omega_term = std::pow(omega, outer_omega_exponent);
 
     for (int i = 0; i < d; i++) {
-        // Calculate the 0-based row and column indices.
-        // Maple's subscript1: ((i-1+q) mod d) + 1  ->  C++ subscript: (i+q) mod d
         int subscript1 = safeMod(i + q, d);
-        int subscript2 = i; // The loop variable i is already 0-based
-
-        // Calculate the exponent for the inner omega term.
-        // Maple's omegaExponent: modp(-(i-1)*p, d) -> C++ exponent: modp(-i*p, d)
+        int subscript2 = i;
         int omegaExponent = safeMod(-i * p, d);
         std::complex<double> inner_omega_term = std::pow(omega, omegaExponent);
-
-        // Add the term to the sum.
         sumTemp += inner_omega_term * M(subscript1, subscript2);
     }
 
     // The final result is scaled by d^(-1) and multiplied by the constant omega term.
     return (outer_omega_term * sumTemp) / static_cast<double>(d);
+}
+
+std::complex<double> f_multiqudit(const Eigen::Ref<const Eigen::MatrixXcd>& M,
+                                  const std::vector<std::pair<size_t, size_t>>& pq_vec, size_t d,
+                                  int inv_2, const std::complex<double>& omega) {
+
+    const size_t numQudits = pq_vec.size();
+    const size_t totalDim = M.rows();
+
+    // Check if the dimensions are consistent
+    if (std::pow(d, numQudits) != totalDim) {
+        throw std::invalid_argument("Inconsistent dimensions");
+    }
+
+    // Calculate the outer omega term: omega^(-2^(-1) * sum(p_k*q_k))
+    int totalOuterExponent = 0;
+    for (const auto& pq : pq_vec) {
+        totalOuterExponent += safeMod(-inv_2 * pq.first * pq.second, d);
+    }
+    std::complex<double> omegaOuter = std::pow(omega, safeMod(totalOuterExponent, d));
+
+    // Perform the inner summation over all d^N states
+    // This could be made clearer by using a TupleIterator
+    std::complex sumTemp = 0.0;
+
+    for (size_t i = 0; i < totalDim; i++) {
+        int totalInnerExponent = 0;
+        size_t matrixIndex_j = 0;
+        size_t currentBase = 1;
+        size_t temp_i = i;
+
+        // Convert the single integer index 'i' to a tuple of base-d indices
+        // and calculate the new index 'j' and the inner omega exponent.
+        for (size_t k = 0; k < numQudits; k++) {
+            const size_t i_k = temp_i % d;
+            // Go through list backwards
+            const size_t p_k = pq_vec[numQudits - k - 1].first;
+            const size_t q_k = pq_vec[numQudits - k - 1].second;
+
+            // Calculate the total inner exponent
+            totalInnerExponent += safeMod(-i_k * p_k, d);
+
+            // Calculate the new index j
+            matrixIndex_j += safeMod(i_k + q_k, d) * currentBase;
+
+            // Update base and temp index for the next qudit
+            currentBase *= d;
+            temp_i /= d;
+        }
+
+        std::complex<double> inner_omega_term = std::pow(omega, safeMod(totalInnerExponent, d));
+        sumTemp += inner_omega_term * M(matrixIndex_j, i);
+    }
+
+    // The final result is scaled by D^(-1) and multiplied by the constant omega term.
+    return (omegaOuter * sumTemp) / static_cast<double>(totalDim);
 }
 
 } // namespace cliffconjtest

@@ -148,7 +148,7 @@ bool validateNecessaryCondFromLinDepPoints(const Eigen::Index d, const std::comp
 bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                          const Eigen::Ref<const Eigen::MatrixXcd>& M_prime) {
     constexpr double mapAbsValPrecision = 1e-5;
-    constexpr double mapXPrecision = 1e-3;
+    constexpr double mapXPrecision = 1e-4;
 
     if (M.rows() != M.cols() || M_prime.rows() != M_prime.cols() || M_prime.cols() != M.cols()) {
         return false;

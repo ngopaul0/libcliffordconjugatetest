@@ -102,6 +102,11 @@ class FMapKey {
 
     // Overload the equality operator for use in unordered_map
     bool operator==(const FMapKey& other) const { return r_ == other.r_ && x_ == other.x_; }
+
+    friend std::ostream& operator<<(std::ostream& os, const FMapKey& obj) {
+        os << "FMapKey(r=" << obj.r() << ", x=" << obj.x() << ")";
+        return os;
+    }
 };
 
 struct FMapKeyHash {

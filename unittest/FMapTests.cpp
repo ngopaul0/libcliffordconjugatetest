@@ -17,7 +17,7 @@ TEST_CASE("FMap", "[FMap]") {
     constexpr double mapXPrecision = 1e-6;
 
     SECTION("Key rounding edge case 1") {
-        const auto z = std::complex<double>(0.99999999999999966, 0.00000000000000057731597280508142);
+        const auto z = std::complex(0.99999999999999966, 0.00000000000000057731597280508142);
         const auto key = FMapKey(5, z, mapAbsValPrecision, mapXPrecision);
         CHECK(key.r() == 1.0);
         CHECK(key.x() == 0.0);
@@ -25,9 +25,73 @@ TEST_CASE("FMap", "[FMap]") {
 
     SECTION("Key rounding edge case 2") {
         const auto z = std::complex<double>(4, 5);
-        const auto key = FMapKey(5, z, 1e-5, 1e-3);
+        auto key = FMapKey(5, z, 1e-5, 1e-3);
         CHECK(key.r() == 6.40312);
         CHECK(key.x() == 0.713);
+
+        key = FMapKey(5, z, 1e-6, 1e-5);
+        CHECK(key.r() == 6.403124);
+        CHECK(key.x() == 0.71306);
+    }
+
+    SECTION("Map insertion rounding") {
+        FMap map(5, 1e-3, 1e-3);
+        const auto z = std::complex<double>(4, 5);
+        auto keyFromExact = map.insertEntry(0, 0, z);
+        CHECK(map.getCount(keyFromExact) == 1);
+
+        auto zApprox = std::complex(3.9999, 4.9999);
+        auto keyFromApprox = map.insertEntry(0, 1, zApprox);
+        CHECK_THAT(keyFromExact.x(), Catch::Matchers::WithinAbs(keyFromApprox.x(), 1e-3));
+        CHECK_THAT(keyFromExact.r(), Catch::Matchers::WithinAbs(keyFromApprox.r(), 1e-3));
+        CHECK(keyFromApprox == keyFromExact);
+
+        std::stringstream ss;
+        ss << "keys: [";
+        const auto allKeys = map.sortedKeys();
+        for (const FMapKey& sKey : allKeys) {
+            ss << sKey << ", ";
+        }
+        ss << "]";
+        INFO(ss.str());
+        CHECK(allKeys.size() == 1);
+        CHECK(map.getCount(keyFromExact) == 2);
+    }
+
+    SECTION("Map insertion rounding - lower precision") {
+        FMap map(5, 1e-2, 1e-2);
+        const auto z = std::complex<double>(4, 5);
+        const auto keyFromExact = map.insertEntry(0, 0, z);
+        CHECK(map.getCount(keyFromExact) == 1);
+
+        std::vector<std::complex<double>> approxKeys = {
+            {3.9999, 4.9999}, {3.9999, 5.0001}, {3.9999, 5.0},
+            {3.9998, 4.9999}, {3.9998, 5.0001}, {3.9998, 5.0},
+            {4.0000, 4.9999}, {4.0000, 5.0001}, {4.0000, 5.0},
+            {4.0001, 4.9999}, {4.0001, 5.0001}, {4.0001, 5.0},
+        };
+
+        size_t keyCount = 1;
+        for (const auto& zApprox : approxKeys) {
+            const auto keyFromApprox = map.insertEntry(0, 1, zApprox);
+            keyCount++;
+            CHECK_THAT(keyFromExact.x(), Catch::Matchers::WithinAbs(keyFromApprox.x(), 1e-3));
+            CHECK_THAT(keyFromExact.r(), Catch::Matchers::WithinAbs(keyFromApprox.r(), 1e-3));
+            CHECK(keyFromApprox == keyFromExact);
+
+            std::stringstream ss;
+            ss << "keys: [";
+            const auto allKeys = map.sortedKeys();
+            for (const FMapKey& sKey : allKeys) {
+                ss << sKey << ", ";
+            }
+            ss << "]";
+            INFO(ss.str());
+
+            CHECK(allKeys.size() == 1);
+            CHECK(map.getCount(keyFromExact) == keyCount);
+        }
+
     }
 
     SECTION("d=5, known result") {

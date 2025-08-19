@@ -1,8 +1,8 @@
 include(../cmake/eigen3.cmake)
 
 add_library(cliffordconjugatetest STATIC cliffordconjugacytest.cpp cliffordconjugacytest.hpp internal/util.cpp
-        internal/absvalmap.h
-        internal/absvalmap.cpp
+        internal/FMap.h
+        internal/FMap.cpp
         internal/cliffordgates.cpp
         internal/cliffordgates.h
         internal/symplecticiterator.h
@@ -10,6 +10,7 @@ add_library(cliffordconjugatetest STATIC cliffordconjugacytest.cpp cliffordconju
         internal/conjtestlemma10.h
         internal/multidimarray.h
         internal/tupleiterator.h
+        internal/hash_mix.h
 )
 target_link_libraries(cliffordconjugatetest PUBLIC Eigen3::Eigen)
 find_package(OpenMP)

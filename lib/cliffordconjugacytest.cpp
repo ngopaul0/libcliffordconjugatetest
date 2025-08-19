@@ -2,7 +2,7 @@
 
 #include <complex>
 #include <iostream>
-#include "internal/absvalmap.h"
+#include "internal/FMap.h"
 #include "internal/bruteforcetest.h"
 #include "internal/util.h"
 
@@ -13,10 +13,10 @@ bool isSymplecticTransformation(size_t d, size_t s1, size_t s2, size_t s3, size_
     return safeMod(s1 * s4 - s2 * s3, d) == 1;
 }
 
-std::optional<std::pair<double, std::pair<size_t, size_t>>>
-findLinearIndependentCoord(const size_t d, const AbsValMap& histogramM,
-                           std::vector<double> sortedKeysM,
-                           const std::pair<size_t, size_t> nonZeroCoord, bool skipZeroKeys) {
+std::optional<std::pair<FMapKey, std::pair<size_t, size_t>>>
+findLinearIndependentCoord(const size_t d, const FMap& histogramM,
+                           const std::vector<FMapKey>& sortedKeysM,
+                           const std::pair<size_t, size_t>& nonZeroCoord, bool skipZeroKeys) {
 
     // Given a subset X of Z_d^2, the following holds:
     //      Let (a,b) in X be a nonzero point, (a,b) \neq (0,0).
@@ -36,7 +36,7 @@ findLinearIndependentCoord(const size_t d, const AbsValMap& histogramM,
     //                                         = 0
     //      (<=) This is clear.
     for (const auto& key : sortedKeysM) {
-        if (skipZeroKeys && key == 0.0) {
+        if (skipZeroKeys && key.r() == 0.0) {
             continue;
         }
 
@@ -83,9 +83,9 @@ std::pair<size_t, size_t> applyTransformation(size_t d, const std::pair<size_t, 
  * @return Whether f_M(v) = omega^k * f_{M'}(u) is satisfied
  */
 bool validateNecessaryCondFromLinDepPoints(const Eigen::Index d, const std::complex<double>& omega,
-                                           const AbsValMap& histogramM, const Eigen::MatrixXcd& M_p,
+                                           const FMap& histogramM, const Eigen::MatrixXcd& M_p,
                                            const Eigen::MatrixXcd& Mprime_p,
-                                           const std::vector<double>& sortedKeysM,
+                                           const std::vector<FMapKey>& sortedKeysM,
                                            const std::pair<size_t, size_t>& v,
                                            const std::pair<unsigned long, unsigned long>& u,
                                            const size_t k) {
@@ -107,7 +107,7 @@ bool validateNecessaryCondFromLinDepPoints(const Eigen::Index d, const std::comp
     // The overall iterations for the nested loops is O(d), because all nonzero points in M_p are
     // pairwise linearly dependent, so tbere's only 1 line of at most O(d) length
     for (const auto& absVal : sortedKeysM) {
-        if (absVal == 0.0) {
+        if (absVal.r() == 0.0) {
             continue;
         }
         for (const auto& [p, q] : histogramM.get(absVal)) {
@@ -174,7 +174,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     // histogramM.get(r) = { (p,q) |  |f_{M}(p,q)| = r }. This mapping can serve as a histogram of
     // |f_M(p,q)| values by counting the number of elements in the list returned by
     // histogramM.get(r).
-    AbsValMap histogramM(5);
+    FMap histogramM(d, 5);
     Eigen::MatrixXcd M_p = Eigen::MatrixXcd::Zero(d, d);
     bool allEqual = true;
     for (size_t p = 0; p < d; p++) {
@@ -195,7 +195,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
     // Now construct a mapping for M' while also checking if the histogram for M' is equal to the
     // one for M. If not, then the two don't have the same entry values.
-    AbsValMap histogramMprime(5, histogramM.size());
+    FMap histogramMprime(d, 5, histogramM.size());
     Eigen::MatrixXcd Mprime_p = Eigen::MatrixXcd::Zero(d, d);
     for (size_t p = 0; p < d; p++) {
         for (size_t q = 0; q < d; q++) {
@@ -225,9 +225,9 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     if (histogramM.size() == 0) {
         return false;
     } else if (histogramM.size() == 1) {
-        if (histogramM.getCount(0.0) > 0) {
+        if (histogramM.getCountOfZero() > 0) {
             // the 0 matrix: histogram has only a key-value mapping for 0
-            return histogramMprime.size() == 1 && histogramMprime.getCount(0.0) > 0;
+            return histogramMprime.size() == 1 && histogramMprime.getCountOfZero() > 0;
         }
 
         // At this point, Mp is just a single value in every entry. We cannot determine a
@@ -240,14 +240,14 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     // Sort the keys by the number of coordinates associated with each key.
     const auto sortedKeysM = histogramM.sortedKeys();
 
-    double firstNonZeroKey = 0.0;
-    for (const double& key : sortedKeysM) {
-        if (key != 0.0) {
+    FMapKey firstNonZeroKey(0.0, 0.0);
+    for (const FMapKey& key : sortedKeysM) {
+        if (key.r() != 0.0) {
             firstNonZeroKey = key;
             break;
         }
     }
-    if (firstNonZeroKey == 0.0) {
+    if (firstNonZeroKey.r() == 0.0) {
         // Should never reach this point: histogramM.size() >= 2 here, so there must be nonzero key
         throw std::invalid_argument("Missing nonzero coordinate");
     }
@@ -367,7 +367,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     auto uKey = sortedKeysM[0];
     std::pair<size_t, size_t> u = histogramM.get(uKey).front();
     auto uIndep = findLinearIndependentCoord(d, histogramM, sortedKeysM, u, false);
-    double uPrimeKey;
+    FMapKey uPrimeKey(0.0, 0.0);
     std::pair<size_t, size_t> uPrime;
     if (uIndep.has_value()) {
         uPrimeKey = uIndep->first;

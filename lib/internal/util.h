@@ -14,6 +14,12 @@ namespace cliffconjtest {
 // Using M_PI will cause compile error on Windows without specifying the above...
 inline constexpr double pi = M_PI;
 
+// pi / 2
+inline constexpr double pi_over_2 = M_PI_2;
+
+// 1 / pi
+inline constexpr double one_over_pi = M_1_PI;
+
 /**
  * @brief Assuming u = omega^k * v, where omega is the dth root of unity, computes the value of k.
  *

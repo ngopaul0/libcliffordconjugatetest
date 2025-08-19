@@ -13,6 +13,39 @@
 using namespace cliffconjtest;
 
 TEST_CASE("Brute force Clifford-conjugate test", "[benchmark][bruteforce]") {
+    BENCHMARK_ADVANCED("d=7, Clifford-conjugate, 2 basis elements")(Catch::Benchmark::Chronometer meter) {
+        const int d = 7; // Example dimension
+        const int inv_2 = fastPowerMod(2, d - 2, d);
+        const std::complex<double> omega =
+            std::exp(std::complex<double>(0, 2.0 * pi / d));
+
+        const Eigen::MatrixXcd W1 = W(d, 1, 2, inv_2, omega);
+        const Eigen::MatrixXcd W2 = W(d, 1, 1, inv_2, omega);
+        const Eigen::MatrixXcd Mprime = W1 + W2;
+
+        const auto X = makeX(d, 2);
+        const auto cliffordGate = cliffordPermutationGate(d, 2);
+        const Eigen::MatrixXcd C = cliffordGate * X;
+        const auto Cstar = C.adjoint();
+        const auto Wmatrix = W(d, 1, 2, inv_2, omega);
+        const Eigen::MatrixXcd M = C * Mprime * Cstar;
+
+        Eigen::MatrixXcd M_p = createMpMatrix(M, omega, inv_2);
+        Eigen::MatrixXcd Mprime_p = createMpMatrix(Mprime, omega, inv_2);
+        Sp1ZdGates gates(d);
+
+        meter.measure([M, Mprime, omega, M_p, Mprime_p, gates] {
+            bool result = bruteForceTestCliffordConjugacy(
+                M, Mprime, omega, M_p, Mprime_p, std::make_optional(std::ref(gates)));
+            if (!result) {
+                INFO("M = " << M);
+                INFO("Mprime = " << Mprime);
+                FAIL("unexpected failure");
+            }
+            return result;
+        });
+    };
+
     BENCHMARK_ADVANCED("d=5: Non-example, Linearly dependent M_p")(Catch::Benchmark::Chronometer meter) {
         const int d = 5; // Example dimension
         const int inv_2 = fastPowerMod(2, d - 2, d);
@@ -128,39 +161,6 @@ TEST_CASE("Brute force Clifford-conjugate test", "[benchmark][bruteforce]") {
 
         const Eigen::MatrixXcd C = W(d, 2, 3, inv_2, omega) * cliffordPermutationGate(d, 2);
         const Eigen::MatrixXcd Cstar = C.adjoint();
-        const Eigen::MatrixXcd M = C * Mprime * Cstar;
-
-        Eigen::MatrixXcd M_p = createMpMatrix(M, omega, inv_2);
-        Eigen::MatrixXcd Mprime_p = createMpMatrix(Mprime, omega, inv_2);
-        Sp1ZdGates gates(d);
-
-        meter.measure([M, Mprime, omega, M_p, Mprime_p, gates] {
-            bool result = bruteForceTestCliffordConjugacy(
-                M, Mprime, omega, M_p, Mprime_p, std::make_optional(std::ref(gates)));
-            if (!result) {
-                INFO("M = " << M);
-                INFO("Mprime = " << Mprime);
-                FAIL("unexpected failure");
-            }
-            return result;
-        });
-    };
-
-    BENCHMARK_ADVANCED("d=7, Clifford-conjugate, 2 basis elements")(Catch::Benchmark::Chronometer meter) {
-        const int d = 7; // Example dimension
-        const int inv_2 = fastPowerMod(2, d - 2, d);
-        const std::complex<double> omega =
-            std::exp(std::complex<double>(0, 2.0 * pi / d));
-
-        const Eigen::MatrixXcd W1 = W(d, 1, 2, inv_2, omega);
-        const Eigen::MatrixXcd W2 = W(d, 1, 1, inv_2, omega);
-        const Eigen::MatrixXcd Mprime = W1 + W2;
-
-        const auto X = makeX(d, 2);
-        const auto cliffordGate = cliffordPermutationGate(d, 2);
-        const Eigen::MatrixXcd C = cliffordGate * X;
-        const auto Cstar = C.adjoint();
-        const auto Wmatrix = W(d, 1, 2, inv_2, omega);
         const Eigen::MatrixXcd M = C * Mprime * Cstar;
 
         Eigen::MatrixXcd M_p = createMpMatrix(M, omega, inv_2);

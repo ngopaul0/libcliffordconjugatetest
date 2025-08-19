@@ -52,9 +52,11 @@ inline double compute_x_forMap(const size_t d, const std::complex<double>& z) {
     return x;
 }
 
-constexpr double roundMapKey(double key, size_t precision) {
-    double multiplier = std::pow(10.0, precision);
-    return std::round(key * multiplier) / multiplier;
+inline double roundMapKey(double key, double epsilon) {
+    if (epsilon == 0.0) {
+        return key;
+    }
+    return std::round(key / epsilon) * epsilon;
 }
 
 /**
@@ -67,11 +69,16 @@ class FMapKey {
     double x_;
 
   public:
+    static const FMapKey ZERO_KEY;
+
+    FMapKey() : r_(0.0), x_(0.0) {}
+
     FMapKey(const double r, const double x) : r_(r), x_(x) {}
 
-    FMapKey(const size_t d, const std::complex<double>& z, size_t precision)
-        : r_(roundMapKey(std::abs(z), precision)),
-          x_(r_ != 0.0 ? roundMapKey(compute_x_forMap(d, z), precision) : 0.0) {}
+    FMapKey(const size_t d, const std::complex<double>& z, const double precisionFor_r,
+            const double precisionFor_x)
+        : r_(roundMapKey(std::abs(z), precisionFor_r)),
+          x_(r_ != 0.0 ? roundMapKey(compute_x_forMap(d, z), precisionFor_x) : 0.0) {}
 
     [[nodiscard]] double r() const { return r_; }
     [[nodiscard]] double x() const { return x_; }
@@ -81,9 +88,7 @@ class FMapKey {
 };
 
 struct FMapKeyHash {
-    std::size_t operator()(const FMapKey& p) const {
-        return hash_pair(p.r(), p.x());
-    }
+    std::size_t operator()(const FMapKey& p) const { return hash_pair(p.r(), p.x()); }
 };
 
 /**
@@ -110,14 +115,16 @@ struct FMapKeyHash {
 struct FMap {
   private:
     const size_t d_;
-    const size_t precision_;
+    const double precisionFor_r_;
+    const double precisionFor_x_;
     std::unordered_map<FMapKey, std::vector<std::pair<size_t, size_t>>, FMapKeyHash> map_;
     static const std::vector<std::pair<size_t, size_t>> EMPTY_PAIR_LIST;
 
   public:
-    explicit FMap(size_t d, size_t precision = 5) : d_(d), precision_(precision) {};
-    explicit FMap(size_t d, size_t precision, size_t mapReservation)
-        : d_(d), precision_(precision) {
+    explicit FMap(size_t d, double precisionFor_r, double precisionFor_x)
+        : d_(d), precisionFor_r_(precisionFor_r), precisionFor_x_(precisionFor_x) {};
+    explicit FMap(size_t d, size_t mapReservation, double precisionFor_r, double precisionFor_x)
+        : FMap(d, precisionFor_r, precisionFor_x) {
         map_.reserve(mapReservation);
     };
 
@@ -126,7 +133,7 @@ struct FMap {
 
     /** Inserts the entry (p,q) and returns the key used */
     FMapKey insertEntry(size_t p, size_t q, const std::complex<double>& value) {
-        const auto key = FMapKey(d_, value, precision_);
+        const auto key = FMapKey(d_, value, precisionFor_r_, precisionFor_x_);
         map_[key].emplace_back(p, q);
         return key;
     }

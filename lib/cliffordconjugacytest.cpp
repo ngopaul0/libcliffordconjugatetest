@@ -147,6 +147,9 @@ bool validateNecessaryCondFromLinDepPoints(const Eigen::Index d, const std::comp
 }
 bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                          const Eigen::Ref<const Eigen::MatrixXcd>& M_prime) {
+    constexpr double mapAbsValPrecision = 1e-5;
+    constexpr double mapXPrecision = 1e-3;
+
     if (M.rows() != M.cols() || M_prime.rows() != M_prime.cols() || M_prime.cols() != M.cols()) {
         return false;
     }
@@ -174,7 +177,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     // histogramM.get(r) = { (p,q) |  |f_{M}(p,q)| = r }. This mapping can serve as a histogram of
     // |f_M(p,q)| values by counting the number of elements in the list returned by
     // histogramM.get(r).
-    FMap histogramM(d, 5);
+    FMap histogramM(d, mapAbsValPrecision, mapXPrecision);
     Eigen::MatrixXcd M_p = Eigen::MatrixXcd::Zero(d, d);
     bool allEqual = true;
     for (size_t p = 0; p < d; p++) {
@@ -195,7 +198,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
     // Now construct a mapping for M' while also checking if the histogram for M' is equal to the
     // one for M. If not, then the two don't have the same entry values.
-    FMap histogramMprime(d, 5, histogramM.size());
+    FMap histogramMprime(d,  histogramM.size(), mapAbsValPrecision, mapXPrecision);
     Eigen::MatrixXcd Mprime_p = Eigen::MatrixXcd::Zero(d, d);
     for (size_t p = 0; p < d; p++) {
         for (size_t q = 0; q < d; q++) {
@@ -269,9 +272,9 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
     // Find a linearly dependent pair. If this doesn't yield a value, then every nonzero coordinate
     // is on a line.
-    auto linIndepCoordOpt =
+    auto linIndepCoordResult =
         findLinearIndependentCoord(d, histogramM, sortedKeysM, nonZeroCoord, true);
-    if (!linIndepCoordOpt.has_value()) {
+    if (!linIndepCoordResult.has_value()) {
         // If all points are pairwise linearly dependent, then
         // there exists v such that for any (p,q), (p,q) = c*v for some c
         // By Lemma 10, we would have f_M(v) = omega^k * f_{M'}(u) for some u. Then S(v) = u, and
@@ -353,8 +356,8 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
         }
         return false;
     }
-    const auto linIndepKey = linIndepCoordOpt.value().first;
-    const auto& linIndepCoord = linIndepCoordOpt.value().second;
+    const auto linIndepKey = linIndepCoordResult.value().first;
+    const auto& linIndepCoord = linIndepCoordResult.value().second;
 
     // v and v' are linearly independent
     const auto vKey = firstNonZeroKey;
@@ -366,13 +369,14 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     // sortedKeysM is sorted for this in increasing order, so just iterate from start.
     auto uKey = sortedKeysM[0];
     std::pair<size_t, size_t> u = histogramM.get(uKey).front();
-    auto uIndep = findLinearIndependentCoord(d, histogramM, sortedKeysM, u, false);
-    FMapKey uPrimeKey(0.0, 0.0);
+    const auto uIndepResult = findLinearIndependentCoord(d, histogramM, sortedKeysM, u, false);
+    FMapKey uPrimeKey;
     std::pair<size_t, size_t> uPrime;
-    if (uIndep.has_value()) {
-        uPrimeKey = uIndep->first;
-        uPrime = uIndep->second;
+    if (uIndepResult.has_value()) {
+        uPrimeKey = uIndepResult->first;
+        uPrime = uIndepResult->second;
     } else {
+        // Fall back to a known pair of linearly independent coordinates
         uKey = vKey;
         u = v;
         uPrimeKey = vPrimeKey;

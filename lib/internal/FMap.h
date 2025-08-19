@@ -134,21 +134,27 @@ struct FMapKeyHash {
  * modification. Random access of list elements are not needed, and the only modifications are
  * appending elements to lists.
  */
-using MatrixCoordinate = std::vector<size_t>;
+using MatrixCoordinate = Eigen::Vector<long, Eigen::Dynamic>;
 
 struct FMap {
   private:
     const size_t d_;
+    const size_t tupleSize_;
     const double precisionFor_r_;
     const double precisionFor_x_;
     std::unordered_map<FMapKey, std::vector<MatrixCoordinate>, FMapKeyHash> map_;
     static const std::vector<MatrixCoordinate> EMPTY_PAIR_LIST;
 
+    static size_t computeTupleLength(size_t numQubits) {
+        // 2^numQubits
+        return 1UL << numQubits;
+    }
+
   public:
-    explicit FMap(size_t d, double precisionFor_r, double precisionFor_x)
-        : d_(d), precisionFor_r_(precisionFor_r), precisionFor_x_(precisionFor_x) {};
-    explicit FMap(size_t d, size_t mapReservation, double precisionFor_r, double precisionFor_x)
-        : FMap(d, precisionFor_r, precisionFor_x) {
+    explicit FMap(size_t d, size_t n, double precisionFor_r, double precisionFor_x)
+        : d_(d), tupleSize_(computeTupleLength(n)), precisionFor_r_(precisionFor_r), precisionFor_x_(precisionFor_x) {};
+    explicit FMap(size_t d, size_t n, size_t mapReservation, double precisionFor_r, double precisionFor_x)
+        : FMap(d, n, precisionFor_r, precisionFor_x) {
         map_.reserve(mapReservation);
     };
 
@@ -156,9 +162,21 @@ struct FMap {
     auto& getMap() { return map_; }
 
     /** Inserts the entry (p,q) and returns the key used */
-    FMapKey insertEntry(const MatrixCoordinate& coordinate, const std::complex<double>& value) {
+    FMapKey insertEntry(Eigen::Vector<long, 2>&& coordinate, const std::complex<double>& value) {
+        if (coordinate.rows() != tupleSize_) {
+            throw std::invalid_argument("Bad matrix coordinate size");
+        }
         const auto key = FMapKey(d_, value, precisionFor_r_, precisionFor_x_);
-        map_[key].push_back(coordinate);
+        map_[key].emplace_back(coordinate);
+        return key;
+    }
+
+    FMapKey insertEntryNTuple(MatrixCoordinate&& coordinate, const std::complex<double>& value) {
+        if (coordinate.rows() != tupleSize_) {
+            throw std::invalid_argument("Bad matrix coordinate size");
+        }
+        const auto key = FMapKey(d_, value, precisionFor_r_, precisionFor_x_);
+        map_[key].emplace_back(coordinate);
         return key;
     }
 

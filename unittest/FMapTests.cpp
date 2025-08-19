@@ -55,7 +55,7 @@ TEST_CASE("FMap", "[FMap]") {
     }
 
     SECTION("Map insertion rounding") {
-        FMap map(5, 1e-3, 1e-3);
+        FMap map(5, 1, 1e-3, 1e-3);
         const auto z = std::complex<double>(4, 5);
         auto keyFromExact = map.insertEntry({0, 0}, z);
         CHECK(map.getCount(keyFromExact) == 1);
@@ -79,7 +79,7 @@ TEST_CASE("FMap", "[FMap]") {
     }
 
     SECTION("Map insertion rounding - lower precision") {
-        FMap map(5, 1e-2, 1e-2);
+        FMap map(5, 1, 1e-2, 1e-2);
         const auto z = std::complex<double>(4, 5);
         const auto keyFromExact = map.insertEntry({0, 0}, z);
         CHECK(map.getCount(keyFromExact) == 1);
@@ -143,7 +143,7 @@ TEST_CASE("FMap", "[FMap]") {
         REQUIRE_THAT(f1.imag(), Catch::Matchers::WithinAbs(fPrime1.imag(), 1e-5));
         REQUIRE_THAT(f1.real(), Catch::Matchers::WithinAbs(fPrime1.real(), 1e-5));
 
-        FMap mapM(d, mapAbsValPrecision, mapXPrecision);
+        FMap mapM(d, 1, mapAbsValPrecision, mapXPrecision);
         std::vector<FMapKey> Mkeys;
         for (size_t p = 0; p < M.rows(); p++) {
             for (size_t q = 0; q < M.cols(); q++) {
@@ -154,7 +154,7 @@ TEST_CASE("FMap", "[FMap]") {
             }
         }
         std::vector<FMapKey> Mprimekeys;
-        FMap mapMprime(d, mapAbsValPrecision, mapXPrecision);
+        FMap mapMprime(d, 1, mapAbsValPrecision, mapXPrecision);
         for (size_t p = 0; p < M.rows(); p++) {
             for (size_t q = 0; q < M.cols(); q++) {
                 const auto key = mapMprime.insertEntry({p, q}, f(M, p, q, inv_2, omega));

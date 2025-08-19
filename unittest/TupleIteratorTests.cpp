@@ -17,9 +17,9 @@ using TupleTestType4 = Eigen::Vector<long, 4>;
 TupleTestType3 calculateExpectedTupleDimSize3(size_t indexTarget,
                                                    const std::vector<size_t>& dimensions) {
     size_t index = 0;
-    for (size_t i = 0; i < dimensions[0]; i++) {
-        for (size_t j = 0; j < dimensions[1]; j++) {
-            for (size_t k = 0; k < dimensions[2]; k++) {
+    for (long i = 0; i < dimensions[0]; i++) {
+        for (long j = 0; j < dimensions[1]; j++) {
+            for (long k = 0; k < dimensions[2]; k++) {
                 if (index == indexTarget) {
                     return {i, j, k};
                 }
@@ -39,10 +39,10 @@ TEST_CASE("TupleIterator", "[tupleiterator]") {
         CHECK(allValues.size() == std::pow(3, 4));
 
         size_t index = 0;
-        for (size_t a = 0; a < 3; a++) {
-            for (size_t b = 0; b < 3; b++) {
-                for (size_t c = 0; c < 3; c++) {
-                    for (size_t d = 0; d < 3; d++) {
+        for (long a = 0; a < 3; a++) {
+            for (long b = 0; b < 3; b++) {
+                for (long c = 0; c < 3; c++) {
+                    for (long d = 0; d < 3; d++) {
                         TupleTestType4 tuple = {a, b, c, d};
                         INFO("index == " << index);
                         REQUIRE(index < allValues.size());
@@ -61,10 +61,10 @@ TEST_CASE("TupleIterator", "[tupleiterator]") {
         }
 
         size_t index = 0;
-        for (size_t a = 0; a < 3; a++) {
-            for (size_t b = 0; b < 3; b++) {
-                for (size_t c = 0; c < 3; c++) {
-                    for (size_t d = 0; d < 3; d++) {
+        for (long a = 0; a < 3; a++) {
+            for (long b = 0; b < 3; b++) {
+                for (long c = 0; c < 3; c++) {
+                    for (long d = 0; d < 3; d++) {
                         TupleTestType4 tuple = {a, b, c, d};
                         INFO("index == " << index);
                         REQUIRE(index < allValues.size());
@@ -80,9 +80,9 @@ TEST_CASE("TupleIterator", "[tupleiterator]") {
         "Iterates correctly over all elements of Z_3 x Z_2 x Z_5 with UseVariableModuli = true") {
         auto iterator = TupleIterator<VariableModuli>({3, 2, 5});
         size_t index = 0;
-        for (size_t a = 0; a < 3; a++) {
-            for (size_t b = 0; b < 2; b++) {
-                for (size_t c = 0; c < 5; c++) {
+        for (long a = 0; a < 3; a++) {
+            for (long b = 0; b < 2; b++) {
+                for (long c = 0; c < 5; c++) {
                     TupleTestType3 tuple = {a, b, c};
                     const TupleTestType3& val = *iterator;
                     INFO("index == " << index);

@@ -189,8 +189,7 @@ class Sp1ZdMatrixIterator {
 
         Sp1ZdMatrix  result = firstMatrix * secondMatrix * thirdMatrix;
 
-        result = result.array().unaryExpr(
-            [&](const long x) { return safeMod(x, modulus_); });
+        result = modMatrix(result, modulus_);
         current_matrix_ = std::make_optional(result);
     }
 };

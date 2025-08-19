@@ -38,8 +38,7 @@ test_clifford_conjugate_lemma_10(size_t pPrime, size_t qPrime, const std::comple
 
     for (const auto& v : M_p.indexIterator()) {
         // it's likely the compiler will optimize this due to Eigen's expression templates
-        Eigen::Vector<long, Eigen::Dynamic> vPrime = symplectic_transform * v;
-        vPrime = vPrime.array().unaryExpr([&](const long x) { return safeMod(x, d); });
+        Eigen::Vector<long, Eigen::Dynamic> vPrime = modMatrix(symplectic_transform * v, d);
         const auto& fM = M_p.get(v);
         const auto& fMPrime = Mprime_p.get(vPrime);
         const auto p = v[0];

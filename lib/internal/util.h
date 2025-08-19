@@ -125,6 +125,16 @@ inline size_t symplecticProduct(size_t d, int p, int q, int pPrime, int qPrime) 
     return safeMod(p * qPrime - pPrime * q, d);
 }
 
+template<typename Derived>
+Eigen::Matrix<typename Derived::Scalar, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime>
+modMatrix(const Eigen::MatrixBase<Derived>& matrix, typename Derived::Scalar modulus) {
+    // The unaryExpr method applies a function to each element of the matrix. The lambda function's parameter is
+    // automatically deduced to be the matrix's scalar type (e.g., int, long).
+    return matrix.unaryExpr([&](const typename Derived::Scalar x) {
+        return safeMod(x, modulus);
+    });
+}
+
 /**
  * @brief Creates the Pauli Z gate acting on a single qudit, with exponent
  * @param d Prime dimension

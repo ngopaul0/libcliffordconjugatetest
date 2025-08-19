@@ -121,11 +121,7 @@ BruteForceReturnType<IsReturningInfo> bruteForceTestCliffordConjugacy(
 
     // Variables for the parallel region
     std::optional<BruteForceReturnType<IsReturningInfo>> result;
-#ifdef _OPENMP
-    omp_lock_t result_lock;
-    omp_init_lock(&result_lock);
-    #pragma omp parallel for collapse(2) shared(result, result_lock) schedule(dynamic)
-#endif
+    #pragma omp parallel for collapse(2) shared(result) schedule(dynamic)
     for (long pPrime = 0; pPrime < d; pPrime++) {
         for (long qPrime = 0; qPrime < d; qPrime++) {
             if (result.has_value()) {
@@ -138,19 +134,17 @@ BruteForceReturnType<IsReturningInfo> bruteForceTestCliffordConjugacy(
                         if (result.has_value()) {
                             return;
                         }
+
                         if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p,
                                                              Mprime_p, S)) {
-                            // Found a match, acquire lock and set the result
-#ifdef _OPENMP
-                            omp_set_lock(&result_lock);
-#endif
-                            if (!result.has_value()) {
-                                result = std::make_optional(
-                                    createValueFromFound<IsReturningInfo>(S, pPrime, qPrime));
+                            #pragma omp critical(result)
+                            {
+                                if (!result.has_value()) {
+                                    result = std::make_optional(
+                                        createValueFromFound<IsReturningInfo>(S, pPrime, qPrime));
+                                }
                             }
-#ifdef _OPENMP
-                            omp_unset_lock(&result_lock);
-#endif
+
                             return;
                         }
                     }
@@ -158,10 +152,6 @@ BruteForceReturnType<IsReturningInfo> bruteForceTestCliffordConjugacy(
                 iterable);
         }
     }
-
-#ifdef _OPENMP
-    omp_destroy_lock(&result_lock);
-#endif
 
     return result.value_or(notFoundValue<IsReturningInfo>());
 }

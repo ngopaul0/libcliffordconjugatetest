@@ -192,7 +192,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
         }
         const auto value = f(M, p, q, inv2, omega);
         M_p.get(matrixCoord) = value;
-        histogramM.insertEntry(matrixCoord, value);
+        histogramM.insertEntry(std::move(matrixCoord), value);
     }
 
 

@@ -167,7 +167,7 @@ struct FMap {
             throw std::invalid_argument("Bad matrix coordinate size");
         }
         const auto key = FMapKey(d_, value, precisionFor_r_, precisionFor_x_);
-        map_[key].emplace_back(coordinate);
+        map_[key].push_back(std::move(coordinate));
         return key;
     }
 
@@ -176,7 +176,7 @@ struct FMap {
             throw std::invalid_argument("Bad matrix coordinate size");
         }
         const auto key = FMapKey(d_, value, precisionFor_r_, precisionFor_x_);
-        map_[key].emplace_back(coordinate);
+        map_[key].push_back(std::move(coordinate));
         return key;
     }
 

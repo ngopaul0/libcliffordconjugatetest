@@ -11,7 +11,10 @@
 namespace cliffconjtest {
 
 template <bool UseVariableDimension>
-struct OptionalArrayField {
+struct OptionalArrayField;
+
+template <>
+struct OptionalArrayField<true> {
     // Only defined when UseVariableDimension == true
     const std::vector<size_t> dimensions_;
 };

@@ -14,7 +14,27 @@ using namespace cliffconjtest;
 
 TEST_CASE("FMap", "[FMap]") {
     constexpr double mapAbsValPrecision = 1e-5;
-    constexpr double mapXPrecision = 1e-6;
+    constexpr double mapXPrecision = 1e-4;
+
+    SECTION("Zero key") {
+        const auto z = std::complex(0.0, 0.00000000000000057731597280508142);
+        const auto key = FMapKey(5, z, mapAbsValPrecision, mapXPrecision);
+        CHECK(key.r() == 0.0);
+        CHECK(key.x() == 0.0);
+    }
+
+    SECTION("Pure imaginary key") {
+        const auto z = std::complex(0.0, 0.1);
+        const auto key = FMapKey(11, z, mapAbsValPrecision, mapXPrecision);
+        CHECK(key.r() == 0.1);
+        double dummy;
+        CHECK(key.x() == std::modf(11/4.0, &dummy));
+
+        const auto z2 = std::complex(0.0, -0.1);
+        const auto key2 = FMapKey(11, z2, mapAbsValPrecision, mapXPrecision);
+        CHECK(key2.r() == 0.1);
+        CHECK(key2.x() == std::modf(11 * 3/4.0, &dummy));
+    }
 
     SECTION("Key rounding edge case 1") {
         const auto z = std::complex(0.99999999999999966, 0.00000000000000057731597280508142);
@@ -96,7 +116,7 @@ TEST_CASE("FMap", "[FMap]") {
 
     SECTION("d=5, known result") {
         const int d = 5; // Example dimension
-        const int inv_2 = fastPowerMod(2, d - 2, d);
+        const int inv_2 = modInverse(2, d);
         const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));
         const Eigen::MatrixXcd M = W(d, 1, 2, inv_2, omega) + W(d, 2, 4, inv_2, omega) +
                                         W(d, 3, 6, inv_2, omega) + W(d, 4, 8, inv_2, omega);
@@ -105,6 +125,7 @@ TEST_CASE("FMap", "[FMap]") {
         const Eigen::MatrixXcd Cstar = C.adjoint();
         const Eigen::MatrixXcd Mprime = C * M * Cstar;
 
+        // precomputed symplectic transform
         Eigen::Matrix2i S;
         S << 2, 0, 0, 3;
 
@@ -143,7 +164,7 @@ TEST_CASE("FMap", "[FMap]") {
             }
         }
         CHECK(mapM.getCountOfZero() == d * d - 4);
-        // CHECK(mapM.getCount(f(M, 1, 2, inv_2, omega)) == 4);
+        CHECK(mapM.getCount(f(M, 1, 2, inv_2, omega)) == 4);
         CHECK(mapM.size() == mapMprime.size());
 
         const auto keys = mapM.sortedKeys();

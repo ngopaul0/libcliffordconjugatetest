@@ -44,6 +44,26 @@ TEST_CASE("Equal matrices are Clifford-conjugate", "[equal]") {
     }
 }
 
+TEST_CASE("zero matrix", "[zero]") {
+    SECTION("Succeeds with two zero matrices") {
+        const int d = 3; // Example dimension
+        const Eigen::MatrixXcd M = Eigen::MatrixXcd::Zero(d, d);
+        const Eigen::MatrixXcd Mprime = Eigen::MatrixXcd::Zero(d, d);
+
+        REQUIRE(isCliffordConjugate(M, Mprime));
+    }
+
+    SECTION("Fails on zero matrix with nonzero matrix") {
+        const int d = 3; // Example dimension
+        const int inv_2 = fastPowerMod(2, d - 2, d);
+        const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));
+        const Eigen::MatrixXcd M = W(d, 1, 2, inv_2, omega);
+        const Eigen::MatrixXcd Mprime = Eigen::MatrixXcd::Zero(d, d);
+
+        REQUIRE(!isCliffordConjugate(M, Mprime));
+    }
+}
+
 TEST_CASE("single Pauli basis element", "[single]") {
     SECTION("Brute force on single Pauli basis element") {
         const int d = 3; // Example dimension
@@ -101,6 +121,25 @@ TEST_CASE("single Pauli basis element", "[single]") {
 }
 
 TEST_CASE("multiple Pauli basis elements", "[multiple]") {
+    SECTION("d=3: All basis elements have coeff 1") {
+        const int d = 3; // Example dimension
+        const int inv_2 = fastPowerMod(2, d - 2, d);
+        const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));
+        Eigen::MatrixXcd Mprime = Eigen::MatrixXcd::Zero(d, d);
+        for (size_t p = 0; p < d; p++) {
+            for (size_t q = 0; q < d; q++) {
+                Mprime += 1.0 * W(d, p, q, inv_2, omega);
+            }
+        }
+
+        const Eigen::MatrixXcd C = W(d, 3, 4, inv_2, omega) * cliffordPermutationGate(d, 2);
+        const Eigen::MatrixXcd Cstar = C.adjoint();
+        const Eigen::MatrixXcd M = C * Mprime * Cstar;
+        INFO("M = " << M);
+        INFO("Mprime = " << Mprime);
+        REQUIRE(isCliffordConjugate(M, Mprime));
+    }
+
     SECTION("d=11: Linearly dependent M_p") {
         const int d = 11; // Example dimension
         const int inv_2 = fastPowerMod(2, d - 2, d);

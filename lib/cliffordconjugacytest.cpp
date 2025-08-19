@@ -183,18 +183,17 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     FMap histogramM(d, 1, mapAbsValPrecision, mapXPrecision);
     MpMatrixType M_p(2, d);
     bool allEqual = true;
-    for (const auto& matrixCoord : M_p.indexIterator()) {
-        assert(matrixCoord.size() == 2);
-        const size_t p = matrixCoord[0];
-        const size_t q = matrixCoord[1];
+    for (const auto& coord : M_p.indexIterator()) {
+        assert(coord.size() == 2);
+        const size_t p = coord[0];
+        const size_t q = coord[1];
         if (allEqual && !isApproxEqual(M(p, q), M_prime(p, q))) {
             allEqual = false;
         }
-        const auto value = f(M, p, q, inv2, omega);
-        M_p.get(matrixCoord) = value;
-        histogramM.insertEntry(std::move(matrixCoord), value);
+        const auto value = f_multiqudit(M, coord, d, inv2, omega);;
+        M_p.get(coord) = value;
+        histogramM.insertEntry(std::move(coord), value);
     }
-
 
     if (allEqual) {
         // M = M', so true since C = I works
@@ -207,10 +206,8 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     MpMatrixType Mprime_p(2, d);
     for (const auto& coord : Mprime_p.indexIterator()) {
         assert(coord.size() == 2);
-        const size_t p = coord[0];
-        const size_t q = coord[1];
 
-        const auto key = f(M_prime, p, q, inv2, omega);
+        const auto key = f_multiqudit(M_prime, coord, d, inv2, omega);
         Mprime_p.get(coord) = key;
 
         const auto mapKey = histogramMprime.insertEntry(std::move(coord), key);

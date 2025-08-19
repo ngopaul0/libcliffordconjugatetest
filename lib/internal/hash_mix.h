@@ -57,6 +57,15 @@ template<std::size_t Bits> struct hash_mix_impl;
 //	x *= 0xe9846af9b1a615d;
 //	x ^= x >> 28;
 //
+// CLIFFORDCONJUGATETEST CHANGE: Update to use version 3:
+//
+// x ^= x >> 32;
+// x *= 0xbea225f9eb34556d;
+// x ^= x >> 29;
+// x *= 0xbea225f9eb34556d;
+// x ^= x >> 32;
+// x *= 0xbea225f9eb34556d;
+// x ^= x >> 29;
 //
 // An equally good alternative is Pelle Evensen's Moremur:
 //
@@ -68,18 +77,20 @@ template<std::size_t Bits> struct hash_mix_impl;
 //
 // (https://mostlymangling.blogspot.com/2019/12/stronger-better-morer-moremur-better.html)
 
+
 template<> struct hash_mix_impl<64>
 {
     inline static std::uint64_t fn( std::uint64_t x )
     {
-        std::uint64_t const m = 0xe9846af9b1a615d;
-
+        // Update from Boost: Updated to version 3: https://jonkagstrom.com/mx3/mx3_rev2.html
+        static constexpr uint64_t C = 0xbea225f9eb34556d;
         x ^= x >> 32;
-        x *= m;
+        x *= C;
+        x ^= x >> 29;
+        x *= C;
         x ^= x >> 32;
-        x *= m;
-        x ^= x >> 28;
-
+        x *= C;
+        x ^= x >> 29;
         return x;
     }
 };
@@ -93,8 +104,8 @@ template<> struct hash_mix_impl<32>
 {
     inline static std::uint32_t fn( std::uint32_t x )
     {
-        std::uint32_t const m1 = 0x21f0aaad;
-        std::uint32_t const m2 = 0x735a2d97;
+        static constexpr std::uint32_t const m1 = 0x21f0aaad;
+        static constexpr std::uint32_t const m2 = 0x735a2d97;
 
         x ^= x >> 16;
         x *= m1;

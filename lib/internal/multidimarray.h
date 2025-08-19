@@ -159,9 +159,9 @@ class MultiDimensionalArray : OptionalArrayField<UseVariableDimension> {
                 thisDimension = this->dimensionPerCoordinate_;
             }
 
-            size_t coordsAtI = getCoordinate(coords, i);
+            long coordsAtI = getCoordinate(coords, i);
             if constexpr (ModOutCoords) {
-                if (coordsAtI < thisDimension || coordsAtI >= thisDimension) {
+                if (coordsAtI < 0 || coordsAtI >= thisDimension) {
                     coordsAtI = safeMod(coordsAtI, thisDimension);
                 }
             }

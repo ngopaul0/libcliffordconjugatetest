@@ -29,6 +29,14 @@ inline bool isApproxEqual(const std::complex<double> a, const std::complex<doubl
     return isApproxEqual(a.real(), b.real(), epsilon) && isApproxEqual(a.imag(), b.imag(), epsilon);
 }
 
+inline size_t computeIntegralPower(const size_t base, const size_t exponent) {
+    size_t result = 1;
+    for (size_t i = 0; i < exponent; ++i) {
+        result *= base;
+    }
+    return result;
+}
+
 /**
  * @brief Assuming u = omega^k * v, where omega is the dth root of unity, computes the value of k.
  *
@@ -195,7 +203,7 @@ std::complex<double> f(const Eigen::Ref<const Eigen::MatrixXcd>& M, int p, int q
  * @return the coefficient of W(p1,q1) ⊗ ... ⊗ W(pn,qn) in the Pauli basis decomposition of M.
  */
 std::complex<double> f_multiqudit(const Eigen::Ref<const Eigen::MatrixXcd>& M,
-                                  const std::vector<std::pair<size_t, size_t>>& pq_vec, size_t d,
+                                  const Eigen::Vector<long, -1>& pq_vec, size_t d,
                                   int inv_2, const std::complex<double>& omega);
 
 /**

@@ -96,21 +96,33 @@ std::complex<double> f(const Eigen::Ref<const Eigen::MatrixXcd>& M, int p, int q
 }
 
 std::complex<double> f_multiqudit(const Eigen::Ref<const Eigen::MatrixXcd>& M,
-                                  const std::vector<std::pair<size_t, size_t>>& pq_vec, size_t d,
+                                  const Eigen::Vector<long, -1>& pq_vec, size_t d,
                                   int inv_2, const std::complex<double>& omega) {
+    if (M.rows() != M.cols()) {
+        throw std::invalid_argument("M is not squre");
+    }
+    assert(pq_vec.size() % 2 == 0);
 
-    const size_t numQudits = pq_vec.size();
+    const size_t numQudits = pq_vec.size() / 2;
+    if (numQudits == 0) {
+        throw std::invalid_argument("empty or single-element pq_vec");
+    }
+
     const size_t totalDim = M.rows();
 
     // Check if the dimensions are consistent
     if (std::pow(d, numQudits) != totalDim) {
-        throw std::invalid_argument("Inconsistent dimensions");
+        std::stringstream ss;
+        ss << "Inconsistent dimensions, pq_vec size = " << pq_vec.size() << " (" << std::pow(d, numQudits) << " != " << totalDim << ")";
+        throw std::invalid_argument(ss.str());
     }
 
     // Calculate the outer omega term: omega^(-2^(-1) * sum(p_k*q_k))
     int totalOuterExponent = 0;
-    for (const auto& pq : pq_vec) {
-        totalOuterExponent += safeMod(-inv_2 * pq.first * pq.second, d);
+    for (size_t i = 0; i < numQudits; i++) {
+        const size_t pIndex = 2 * i ;
+        const size_t qIndex = 2 * i + 1;
+        totalOuterExponent += safeMod(-inv_2 * pq_vec(pIndex) * pq_vec(qIndex), d);
     }
     std::complex<double> omegaOuter = std::pow(omega, safeMod(totalOuterExponent, d));
 
@@ -128,9 +140,11 @@ std::complex<double> f_multiqudit(const Eigen::Ref<const Eigen::MatrixXcd>& M,
         // and calculate the new index 'j' and the inner omega exponent.
         for (size_t k = 0; k < numQudits; k++) {
             const size_t i_k = temp_i % d;
+
+            const size_t pqIndex = numQudits - k - 1;
             // Go through list backwards
-            const size_t p_k = pq_vec[numQudits - k - 1].first;
-            const size_t q_k = pq_vec[numQudits - k - 1].second;
+            const size_t p_k = pq_vec(2 * pqIndex);
+            const size_t q_k = pq_vec(2 * pqIndex + 1);
 
             // Calculate the total inner exponent
             totalInnerExponent += safeMod(-i_k * p_k, d);

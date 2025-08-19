@@ -372,8 +372,8 @@ TEST_CASE("f function", "[f]") {
         const Eigen::Vector<long, 4> nonZeroTuple = {1,2,0,1};
         const Eigen::Vector<long, 4> nonZeroTuple2 = {0, 0, 1, 2};
         for (const auto& tuple : TupleIterator<SingleModulus>(d, 4)) {
-            auto fValue = f_multiqudit(M, {{tuple[0],tuple[1]}, {tuple[2],tuple[3]}}, d, inv_2, omega);
             INFO("Tuple is " << tuple[0] << ", " << tuple[1] << ", " << tuple[2] << ", " << tuple[3]);
+            auto fValue = f_multiqudit(M, tuple, d, inv_2, omega);
             // f_M should be the expected values in the basis elements specified, and 0 everywhere else
             if (tuple == nonZeroTuple) {
                 CHECK_THAT(fValue.imag(), Catch::Matchers::WithinAbs(0, 1e-5));
@@ -400,7 +400,8 @@ TEST_CASE("f function", "[f]") {
         CHECK_THAT(naiveResult.real(), Catch::Matchers::WithinAbs(0.4951206666, 1e-5));
         CHECK_THAT(naiveResult.imag(), Catch::Matchers::WithinAbs(2.23742266, 1e-5));
 
-        auto optimizedResult = f_multiqudit(U, {{0,0}}, d, inv_2, omega);
+        Eigen::Vector<long, 2> zero = Eigen::Vector<long, 2>::Zero();
+        auto optimizedResult = f_multiqudit(U, zero, d, inv_2, omega);
         CHECK_THAT(optimizedResult.real(), Catch::Matchers::WithinAbs(0.4951206666, 1e-5));
         CHECK_THAT(optimizedResult.imag(), Catch::Matchers::WithinAbs(2.23742266, 1e-5));
     }
@@ -434,7 +435,8 @@ TEST_CASE("f function", "[f]") {
 
                     INFO("Iteration " << i << " p " << p << " q " << q << ", U = " << U);
                     auto naiveValue = fNaive(U, p, q, inv_2, omega);
-                    auto optimizedValue = f_multiqudit(U, {{p, q}}, d, inv_2, omega);
+                    const Eigen::Vector<long, 2> pq = {p, q};
+                    auto optimizedValue = f_multiqudit(U, pq, d, inv_2, omega);
                     REQUIRE_THAT(naiveValue.imag(),
                                  Catch::Matchers::WithinAbs(optimizedValue.imag(), 1e-9));
                     REQUIRE_THAT(naiveValue.real(),

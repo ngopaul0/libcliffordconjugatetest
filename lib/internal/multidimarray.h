@@ -41,6 +41,9 @@ struct OptionalArrayField<false> {
 template <typename T, bool UseVariableDimension>
 class MultiDimensionalArray : OptionalArrayField<UseVariableDimension> {
   public:
+    /**
+     * The iterator is simple because we can just rely on the backing array.
+     */
     class iterator {
       public:
         // Required iterator type aliases for C++17 and later
@@ -216,7 +219,8 @@ class MultiDimensionalArray : OptionalArrayField<UseVariableDimension> {
 
     template <bool B = UseVariableDimension, typename = std::enable_if_t<!B>>
     [[nodiscard]] TupleIterator<SingleModulus> indexIterator() const {
-        return TupleIterator<SingleModulus>(this->dimensionPerCoordinate_, this->numCoordinatePlaces_);
+        return TupleIterator<SingleModulus>(this->dimensionPerCoordinate_,
+                                            this->numCoordinatePlaces_);
     }
 };
 

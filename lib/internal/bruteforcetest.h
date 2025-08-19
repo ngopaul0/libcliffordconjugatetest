@@ -6,6 +6,7 @@
 #include <variant>
 
 #include "conjtestlemma10.h"
+#include "multidimarray.h"
 #include "symplecticiterator.h"
 
 namespace cliffconjtest {
@@ -33,17 +34,17 @@ class Sp1ZdGates {
  * @param inv_2 2^{-1} mod d
  * @return The matrix M_p such that M_p(i,j) = f_M(i,j)
  */
-inline Eigen::MatrixXcd createMpMatrix(const Eigen::Ref<const Eigen::MatrixXcd>& M,
+inline MpMatrixType createMpMatrix(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                                        const std::complex<double>& omega, const size_t inv_2) {
     const size_t d = M.rows();
     if (d != M.cols()) {
         throw std::invalid_argument("non-square matrix");
     }
 
-    Eigen::MatrixXcd M_p = Eigen::MatrixXcd::Zero(d, d);
+    MpMatrixType M_p(2, d);
     for (size_t i = 0; i < d; i++) {
         for (size_t j = 0; j < d; j++) {
-            M_p(i, j) = f(M, i, j, inv_2, omega);
+            M_p({i, j}) = f(M, i, j, inv_2, omega);
         }
     }
     return M_p;
@@ -98,8 +99,8 @@ createValueFromFound(const Eigen::Matrix2i& S, const size_t pPrime, const size_t
 template <bool IsReturningInfo = false>
 BruteForceReturnType<IsReturningInfo> bruteForceTestCliffordConjugacy(
     const Eigen::Ref<const Eigen::MatrixXcd>& M, const Eigen::Ref<const Eigen::MatrixXcd>& Mprime,
-    const std::complex<double>& omega, const Eigen::Ref<const Eigen::MatrixXcd> M_p,
-    const Eigen::Ref<const Eigen::MatrixXcd>& Mprime_p,
+    const std::complex<double>& omega, const MultiDimensionalArray<std::complex<double>, false>& M_p,
+    const MultiDimensionalArray<std::complex<double>, false>& Mprime_p,
     std::optional<std::reference_wrapper<const Sp1ZdGates>> gates = std::nullopt) {
 
     const size_t d = M.rows();

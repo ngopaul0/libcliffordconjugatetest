@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include "util.h"
 #include "tupleiterator.h"
 
 namespace cliffconjtest {
@@ -122,7 +123,18 @@ class MultiDimensionalArray : OptionalArrayField<UseVariableDimension> {
   private:
     std::vector<T> data{};
 
-    [[nodiscard]] size_t get_index(const std::vector<size_t>& coords) const {
+    template<typename VectorT>
+    constexpr long getCoordinate(const VectorT& coords, const size_t index) const {
+        if constexpr (std::is_same_v<VectorT, std::vector<size_t>> || std::is_same_v<VectorT, const std::vector<size_t>>){
+            return coords[index];
+        } else  {
+            // Eigen matrix
+            return coords(index);
+        }
+    }
+
+    template<typename VectorT, bool ModOutCoords = false>
+    [[nodiscard]] size_t get_index(const VectorT& coords) const {
         int numDimensions;
         if constexpr (UseVariableDimension) {
             numDimensions = this->dimensions_.size();
@@ -147,11 +159,23 @@ class MultiDimensionalArray : OptionalArrayField<UseVariableDimension> {
                 thisDimension = this->dimensionPerCoordinate_;
             }
 
-            if (coords[i] >= thisDimension) {
+            size_t coordsAtI = getCoordinate(coords, i);
+            if constexpr (ModOutCoords) {
+                if (coordsAtI < thisDimension || coordsAtI >= thisDimension) {
+                    coordsAtI = safeMod(coordsAtI, thisDimension);
+                }
+            }
+            if (coordsAtI >= thisDimension) {
                 std::stringstream ss;
                 ss << "coordinate (";
                 for (size_t j = 0; j < coords.size(); j++) {
-                    ss << coords[j];
+                    size_t coordsAtj = getCoordinate(coords, j);
+                    if constexpr (ModOutCoords) {
+                        if (coordsAtj < thisDimension || coordsAtj >= thisDimension) {
+                            coordsAtj = safeMod(coordsAtj, thisDimension);
+                        }
+                    }
+                    ss << coordsAtj;
                     if (j < coords.size() - 1) {
                         ss << ", ";
                     }
@@ -159,7 +183,7 @@ class MultiDimensionalArray : OptionalArrayField<UseVariableDimension> {
                 ss << ") is out of bounds ";
                 throw std::out_of_range(ss.str());
             }
-            index += coords[i] * multiplier;
+            index += coordsAtI * multiplier;
             multiplier *= thisDimension;
         }
         return index;
@@ -181,9 +205,16 @@ class MultiDimensionalArray : OptionalArrayField<UseVariableDimension> {
         data.resize(std::pow(dimensionForAllCoordinates, numCoordinates));
     }
 
+
     T& operator()(const std::vector<size_t>& coords) { return data[get_index(coords)]; }
 
+    T& get(const Eigen::Vector<long, Eigen::Dynamic>& coords) { return data[get_index(coords)]; }
+
     const T& operator()(const std::vector<size_t>& coords) const { return data[get_index(coords)]; }
+
+    const T& get(const Eigen::Vector<long, Eigen::Dynamic>& coords) const { return data[get_index(coords)]; }
+
+    const T& getFromInt(const Eigen::Vector<int, Eigen::Dynamic>& coords) const { return data[get_index(coords)]; }
 
     iterator begin() { return iterator(&data[0]); }
     iterator end() { return iterator(&data[0] + data.size()); }
@@ -223,6 +254,8 @@ class MultiDimensionalArray : OptionalArrayField<UseVariableDimension> {
                                             this->numCoordinatePlaces_);
     }
 };
+
+using MpMatrixType = MultiDimensionalArray<std::complex<double>, false>;
 
 } // namespace cliffconjtest
 

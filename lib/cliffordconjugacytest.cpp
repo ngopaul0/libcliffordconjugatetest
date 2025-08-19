@@ -4,6 +4,7 @@
 #include <iostream>
 #include "internal/FMap.h"
 #include "internal/bruteforcetest.h"
+#include "internal/multidimarray.h"
 #include "internal/util.h"
 
 namespace cliffconjtest {
@@ -82,8 +83,8 @@ Eigen::Vector<long, 2> applyTransformation(size_t d, const MatrixCoordinate& tar
  * @return Whether f_M(v) = omega^k * f_{M'}(u) is satisfied
  */
 bool validateNecessaryCondFromLinDepPoints(const Eigen::Index d, const std::complex<double>& omega,
-                                           const FMap& histogramM, const Eigen::MatrixXcd& M_p,
-                                           const Eigen::MatrixXcd& Mprime_p,
+                                           const FMap& histogramM, const MpMatrixType& M_p,
+                                           const MpMatrixType& Mprime_p,
                                            const std::vector<FMapKey>& sortedKeysM,
                                            const MatrixCoordinate& v,
                                            const MatrixCoordinate& u,
@@ -124,9 +125,10 @@ bool validateNecessaryCondFromLinDepPoints(const Eigen::Index d, const std::comp
             assert(safeMod(c * v(0), d) == p && safeMod(c * v(1), d) == q);
 
             // alpha is f_M(p,q)
-            const auto& alpha = M_p(p, q);
+            const auto& alpha = M_p.get(coordsForAbsVal);
             // beta is f_{M'}(S(p,q)), but by Lemma 10, we would need S(p,q) = S(c*v) = c*S(v) = c*u
-            const auto& beta = Mprime_p(safeMod(c * u(0), d), safeMod(c * u(1), d));
+            Eigen::Vector<long, 2> cTimesU(safeMod(c * u(0), d), safeMod(c * u(1), d));
+            const auto& beta = Mprime_p.get(cTimesU);
             // By Lemma 10, the power of omega is
             //     [(p,q), (p',q')] = [(cv1, cv2), (p', q')]
             //                      = cv1 * q' - p' * cv2
@@ -179,7 +181,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     // |f_M(p,q)| values by counting the number of elements in the list returned by
     // histogramM.get(r).
     FMap histogramM(d, 1, mapAbsValPrecision, mapXPrecision);
-    Eigen::MatrixXcd M_p = Eigen::MatrixXcd::Zero(d, d);
+    MpMatrixType M_p(2, d);
     bool allEqual = true;
     for (size_t p = 0; p < d; p++) {
         for (size_t q = 0; q < d; q++) {
@@ -187,9 +189,8 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                 allEqual = false;
             }
             const auto value = f(M, p, q, inv2, omega);
-            M_p(p, q) = value;
-
             Eigen::Vector<long, 2> coord(p, q);
+            M_p.get(coord) = value;
             histogramM.insertEntry(std::move(coord), value);
         }
     }
@@ -202,13 +203,13 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     // Now construct a mapping for M' while also checking if the histogram for M' is equal to the
     // one for M. If not, then the two don't have the same entry values.
     FMap histogramMprime(d, 1, histogramM.size(), mapAbsValPrecision, mapXPrecision);
-    Eigen::MatrixXcd Mprime_p = Eigen::MatrixXcd::Zero(d, d);
+    MpMatrixType Mprime_p(2, d);
     for (size_t p = 0; p < d; p++) {
         for (size_t q = 0; q < d; q++) {
-            Mprime_p(p, q) = f(M_prime, p, q, inv2, omega);
-
-            const auto key = Mprime_p(p, q);
             Eigen::Vector<long, 2> coord(p, q);
+            const auto key = f(M_prime, p, q, inv2, omega);
+            Mprime_p.get(coord) = key;
+
             const auto mapKey = histogramMprime.insertEntry(std::move(coord), key);
             // Early histogram check
             if (histogramMprime.getCount(mapKey) > histogramM.getCount(mapKey)) {
@@ -300,7 +301,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
         const MatrixCoordinate& v = histogramM.get(key).front();
 
         // alpha_v = f_M(v)
-        const auto alpha = M_p(v(0), v(1));
+        const auto alpha = M_p.get(v);
         assert(alpha.real() != 0.0 && alpha.imag() != 0.0);
         // The size of this is at most O(d), because if all nonzero entries have linearly dependent
         // coordinates, then all the coordinates are in a line. A line can have at most O(d) points
@@ -309,7 +310,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
         // TODO: Refactor
         for (const auto& u : possibleU) {
             // For each beta_u with the same absolute value
-            const auto& beta = Mprime_p(u(0), u(1));
+            const auto& beta = Mprime_p.get(u);
             // Try to find integer k such that alpha_v = omega^k beta_u
             const double kTest = checkPhase(d, alpha, beta);
             const size_t k = std::round(kTest);
@@ -336,7 +337,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                 const auto m1 = v(1);
                 const auto n0 = u(0);
                 const auto n1 = u(1);
-                assert(isApproxEqual(M_p(m0, m1), std::pow(omega, k) * Mprime_p(n0, n1)));
+                assert(isApproxEqual(M_p.get(v), std::pow(omega, k) * Mprime_p.get(u)));
 
                 // The solution to S.m = n where
                 //      S = [[x0, x1], [x2,x3]], m = [[m0],[m1]], n = [[n0], [n1]]
@@ -423,13 +424,13 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
             if (isSymplecticTransformation(d, x0, x1, x2, x3)) {
                 // Let alpha_v = f_M(v) and beta_v = f_{M'}(v)
-                const auto& alphaV = M_p(v(0), v(1));
-                const auto& alphaVPrime = M_p(vPrime(0), vPrime(1));
+                const auto& alphaV = M_p.get(v);
+                const auto& alphaVPrime = M_p.get(vPrime);
 
                 const auto& betaVCoord = applyTransformation(d, v, x0, x1, x2, x3);
-                const auto& betaV = Mprime_p(betaVCoord(0), betaVCoord(1));
+                const auto& betaV = Mprime_p.get(betaVCoord);
                 const auto& betaVPrimeCoord = applyTransformation(d, vPrime, x0, x1, x2, x3);
-                const auto& betaVPrime = Mprime_p(betaVPrimeCoord(0), betaVPrimeCoord(1));
+                const auto& betaVPrime = Mprime_p.get(betaVPrimeCoord);
 
                 // Try to find integer k such that alpha_v = omega^k beta_v
                 const double kTest = checkPhase(d, alphaV, betaV);

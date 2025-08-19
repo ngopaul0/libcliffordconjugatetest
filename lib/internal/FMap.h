@@ -66,7 +66,7 @@ inline double compute_x_forMap(const size_t d, const std::complex<double>& z, do
     }
 
     const auto rhs = abs(z) * std::exp(std::complex<double>(0, 2 * pi / static_cast<double>(d) * (n + x)));
-    assert(isApproxEqual(z, rhs), epsilon);
+    assert(isApproxEqual(z, rhs, epsilon));
     return roundedX;
 }
 

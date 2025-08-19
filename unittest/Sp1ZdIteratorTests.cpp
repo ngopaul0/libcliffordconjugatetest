@@ -40,19 +40,6 @@ void runUniquenessTest(size_t d) {
     SECTION("Generates unique symplectic matrices: d = " #dval) { runUniquenessTest(dval); }
 
 TEST_CASE("Sp1ZdIterator", "[sp1zditerator]") {
-    SECTION("End element is lazily determined") {
-        for (size_t d : {3, 5, 7, 11, 13, 17, 19, 23, 29}) {
-            INFO("d = " << d);
-            std::vector<size_t> dV = {5, 1};
-
-            auto endV = dV.end();
-            auto x = *endV;
-
-            Sp1ZdMatrixRange iterator(d);
-            auto end = iterator.end();
-        }
-    }
-
     SECTION("Generates valid symplectic matrices") {
         for (size_t d : {3, 5, 7, 11, 13, 17, 19, 23, 29}) {
             INFO("d = " << d);

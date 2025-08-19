@@ -4,11 +4,9 @@
 #include <complex>
 #include <vector>
 #include <variant>
-#include <execution>
 
 #include "conjtestlemma10.h"
 #include "symplecticiterator.h"
-#include "tupleiterator.h"
 
 namespace cliffconjtest {
 
@@ -84,14 +82,6 @@ createValueFromFound(const Eigen::Matrix2i& S, const size_t pPrime, const size_t
     }
 }
 
-template<typename T>
-struct is_random_access_iterator {
-    static constexpr bool value = std::is_same_v<
-        typename std::iterator_traits<T>::iterator_category,
-        std::random_access_iterator_tag
-    >;
-};
-
 /**
  * Runs a brute-force Clifford-conjugate test based on Lemma 10
  *
@@ -131,39 +121,37 @@ BruteForceReturnType<IsReturningInfo> bruteForceTestCliffordConjugacy(
 
     // Variables for the parallel region
     std::optional<BruteForceReturnType<IsReturningInfo>> result;
+    #pragma omp parallel for collapse(2) shared(result) schedule(dynamic)
+    for (long pPrime = 0; pPrime < d; pPrime++) {
+        for (long qPrime = 0; qPrime < d; qPrime++) {
+            if (result.has_value()) {
+                continue;
+            }
 
-    const auto pairs = TupleIterator<SingleModulus>(d, 2);
-
-    static_assert(is_random_access_iterator<TupleIterator<SingleModulus>>::value,
-                  "Iterator must be a random access iterator");
-
-    TupleIterator<SingleModulus> begin = pairs.begin();
-    TupleIterator<SingleModulus> end = pairs.end<>();
-    std::mutex resultMutex;
-    auto it = std::find_if(std::execution::par_unseq, begin, end,
-            [iterable, omega, M, M_p, Mprime_p, &result, &resultMutex](const auto& obj) {
-                const auto& pPrime = obj[0];
-                const auto& qPrime = obj[1];
-                const std::optional<BruteForceReturnType<IsReturningInfo>> resultVisit = std::visit(
-                    [&](auto&& currentSymplecticTransforms) {
-                        for (const auto& S : *currentSymplecticTransforms) {
-                            if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p,
-                                                                 Mprime_p, S)) {
-
-                                return std::make_optional(createValueFromFound<IsReturningInfo>(S, pPrime, qPrime));
-                            }
+            std::visit(
+                [&](auto&& currentSymplecticTransforms) {
+                    for (const auto& S : *currentSymplecticTransforms) {
+                        if (result.has_value()) {
+                            return;
                         }
-                        return static_cast<std::optional<BruteForceReturnType<IsReturningInfo>>>(std::nullopt);
-                    },
-                    iterable);
-                {
-                    if (resultVisit.has_value()) {
-                        result = resultVisit;
-                        return true;
+
+                        if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p,
+                                                             Mprime_p, S)) {
+                            #pragma omp critical(result)
+                            {
+                                if (!result.has_value()) {
+                                    result = std::make_optional(
+                                        createValueFromFound<IsReturningInfo>(S, pPrime, qPrime));
+                                }
+                            }
+
+                            return;
+                        }
                     }
-                    return false;
-                }
-            });
+                },
+                iterable);
+        }
+    }
 
     return result.value_or(notFoundValue<IsReturningInfo>());
 }

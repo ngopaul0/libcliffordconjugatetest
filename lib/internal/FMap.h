@@ -25,8 +25,9 @@ inline double compute_x_forMap(const size_t d, const std::complex<double>& z, do
     // Then to express z = r * exp(2*pi*i/d * (n + x)), from z = r * exp(i * theta) we conclude
     // theta = 2*pi/d * (n + x), so n + x = d * theta / (2 * pi)
     double nPlusX;
-    if (z.real() == 0.0) {
-        if (z.imag() == 0.0) {
+    // Check to prevent division by zero
+    if (isApproxEqual(z.real(), 0.0, epsilon)) {
+        if (isApproxEqual(z.imag(), 0.0, epsilon)) {
             return 0.0;
         }
         // const double theta = z.imag() > 0 ? pi / 2 : 3 * pi / 2;
@@ -41,7 +42,7 @@ inline double compute_x_forMap(const size_t d, const std::complex<double>& z, do
         }
     } else {
         const double theta = atan2(z.imag(), z.real());
-        if (std::abs(theta) < epsilon) {
+        if (isApproxEqual(theta, 0.0, epsilon)) {
             nPlusX = 0.0;
         } else if (theta >= 0.0) {
             nPlusX = static_cast<double>(d) * theta / (2 * pi);
@@ -65,7 +66,8 @@ inline double compute_x_forMap(const size_t d, const std::complex<double>& z, do
         roundedX = roundMapKey(x, epsilon);
     }
 
-    const auto rhs = abs(z) * std::exp(std::complex<double>(0, 2 * pi / static_cast<double>(d) * (n + x)));
+    const auto rhs =
+        abs(z) * std::exp(std::complex<double>(0, 2 * pi / static_cast<double>(d) * (n + x)));
     assert(isApproxEqual(z, rhs, epsilon));
     return roundedX;
 }

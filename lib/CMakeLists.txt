@@ -11,6 +11,7 @@ add_library(cliffordconjugatetest STATIC cliffordconjugacytest.cpp cliffordconju
         internal/multidimarray.h
         internal/tupleiterator.h
         internal/hash_mix.h
+        generalized/vectorisationalgorithm.h
 )
 target_link_libraries(cliffordconjugatetest PUBLIC Eigen3::Eigen)
 find_package(OpenMP)

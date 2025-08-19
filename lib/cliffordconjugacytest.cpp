@@ -481,6 +481,63 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 bool isCliffordConjugateGeneralized(const std::size_t d, const std::size_t n,
                                     const Eigen::Ref<const Eigen::MatrixXcd>& M,
                                     const Eigen::Ref<const Eigen::MatrixXcd>& M_prime) {
+    constexpr double mapAbsValPrecision = 1e-5;
+    constexpr double mapXPrecision = 1e-4;
+
+    const size_t D = computeIntegralPower(d, n);
+
+    if (M.rows() != D || M.cols() != D) {
+        return false;
+    }
+    if (M_prime.rows() != D || M_prime.cols() != D) {
+        return false;
+    }
+
+    // Since trace is cyclic, if M = CM'C^*, then tr(M) = tr(CM'C^*) = tr(M'C^*C) = tr(M').
+    if (!isApproxEqual(M.trace(), M_prime.trace())) {
+        return false;
+    }
+
+    // earlier assert guarantees M.rows() == M.cols()
+    const auto inv2 = modInverse(2, d);
+    const auto omega = std::exp(std::complex<double>(0, 2 * pi / d));
+
+    FMap histogramM(d, n, mapAbsValPrecision, mapXPrecision);
+    MpMatrixType M_p(2 * n, d);
+
+    for (const auto& coord : M_p.indexIterator()) {
+        assert(coord.size() == 2 * n);
+        const auto value = f_multiqudit(M, coord, d, inv2, omega);
+        M_p.get(coord) = value;
+        histogramM.insertEntry(std::move(coord), value);
+    }
+
+
+    FMap histogramMprime(d, n, histogramM.size(), mapAbsValPrecision, mapXPrecision);
+    MpMatrixType Mprime_p(2 * n, d);
+    for (const auto& coord : Mprime_p.indexIterator()) {
+        assert(coord.size() == 2 * n);
+        const auto key = f_multiqudit(M_prime, coord, d, inv2, omega);
+        Mprime_p.get(coord) = key;
+        const auto mapKey = histogramMprime.insertEntry(std::move(coord), key);
+        // Early histogram check
+        if (histogramMprime.getCount(mapKey) > histogramM.getCount(mapKey)) {
+            return false;
+        }
+    }
+
+
+    if (histogramM.size() != histogramMprime.size()) {
+        return false;
+    }
+    // Worst case: Every entry in M_p and M_prime is unique, and this results in O(d^2) absolute
+    // values to check.
+    for (const auto& key : histogramMprime.getMap() | std::views::keys) {
+        if (histogramMprime.getCount(key) != histogramM.getCount(key)) {
+            return false;
+        }
+    }
+
     return false;
 }
 

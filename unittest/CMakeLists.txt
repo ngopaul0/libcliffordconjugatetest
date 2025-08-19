@@ -14,6 +14,7 @@ add_executable(unittest CliffConjTests.cpp
         MultiDimensionalArrayTests.cpp
         TupleIteratorTests.cpp
         FMapTests.cpp
+        generalized/VectorisationAlgorithmTests.cpp
 )
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     # Add cross-platform macro to indicate debug build

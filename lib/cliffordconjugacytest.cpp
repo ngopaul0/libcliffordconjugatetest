@@ -183,17 +183,18 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     FMap histogramM(d, 1, mapAbsValPrecision, mapXPrecision);
     MpMatrixType M_p(2, d);
     bool allEqual = true;
-    for (size_t p = 0; p < d; p++) {
-        for (size_t q = 0; q < d; q++) {
-            if (allEqual && !isApproxEqual(M(p, q), M_prime(p, q))) {
-                allEqual = false;
-            }
-            const auto value = f(M, p, q, inv2, omega);
-            Eigen::Vector<long, 2> coord(p, q);
-            M_p.get(coord) = value;
-            histogramM.insertEntry(std::move(coord), value);
+    for (const auto& matrixCoord : M_p.indexIterator()) {
+        assert(matrixCoord.size() == 2);
+        const size_t p = matrixCoord[0];
+        const size_t q = matrixCoord[1];
+        if (allEqual && !isApproxEqual(M(p, q), M_prime(p, q))) {
+            allEqual = false;
         }
+        const auto value = f(M, p, q, inv2, omega);
+        M_p.get(matrixCoord) = value;
+        histogramM.insertEntry(matrixCoord, value);
     }
+
 
     if (allEqual) {
         // M = M', so true since C = I works
@@ -204,19 +205,21 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     // one for M. If not, then the two don't have the same entry values.
     FMap histogramMprime(d, 1, histogramM.size(), mapAbsValPrecision, mapXPrecision);
     MpMatrixType Mprime_p(2, d);
-    for (size_t p = 0; p < d; p++) {
-        for (size_t q = 0; q < d; q++) {
-            Eigen::Vector<long, 2> coord(p, q);
-            const auto key = f(M_prime, p, q, inv2, omega);
-            Mprime_p.get(coord) = key;
+    for (const auto& coord : M_p.indexIterator()) {
+        assert(coord.size() == 2);
+        const size_t p = coord[0];
+        const size_t q = coord[1];
 
-            const auto mapKey = histogramMprime.insertEntry(std::move(coord), key);
-            // Early histogram check
-            if (histogramMprime.getCount(mapKey) > histogramM.getCount(mapKey)) {
-                return false;
-            }
+        const auto key = f(M_prime, p, q, inv2, omega);
+        Mprime_p.get(coord) = key;
+
+        const auto mapKey = histogramMprime.insertEntry(std::move(coord), key);
+        // Early histogram check
+        if (histogramMprime.getCount(mapKey) > histogramM.getCount(mapKey)) {
+            return false;
         }
     }
+
 
     if (histogramM.size() != histogramMprime.size()) {
         return false;

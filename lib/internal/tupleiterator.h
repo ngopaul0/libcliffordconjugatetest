@@ -106,7 +106,7 @@ class TupleIterator : OptionalField<Type> {
   public:
     // Required iterator type aliases for C++17 and later
     using iterator_category = std::random_access_iterator_tag;
-    using value_type = std::vector<size_t>;
+    using value_type = Eigen::Vector<long, Eigen::Dynamic>;
     using difference_type = std::ptrdiff_t;
     using pointer = void;
     using reference = value_type;
@@ -149,7 +149,8 @@ class TupleIterator : OptionalField<Type> {
             throw std::out_of_range("Attempt to dereference an end iterator.");
         }
         if constexpr (isVariableModuli<Type>) {
-            std::vector<size_t> tuple(this->moduli_.size());
+            value_type tuple;
+            tuple.resize(this->moduli_.size());
             std::size_t currentIndex = index_;
             // like mixed-radix number system
             for (int i = this->moduli_.size() - 1; i >= 0; i--) {
@@ -158,7 +159,8 @@ class TupleIterator : OptionalField<Type> {
             }
             return tuple;
         } else {
-            std::vector<size_t> tuple(this->dimensions_);
+            value_type tuple;
+            tuple.resize(this->dimensions_);
             std::size_t x = index_;
             for (int i = this->dimensions_ - 1; i >= 0; i--) {
                 tuple[i] = x % this->modulus_;

@@ -369,8 +369,8 @@ TEST_CASE("f function", "[f]") {
                 W(d, 0,0, inv_2, omega),
                 W(d, 1,2, inv_2, omega));
 
-        const std::vector<size_t> nonZeroTuple = {1,2,0,1};
-        const std::vector<size_t> nonZeroTuple2 = {0, 0, 1, 2};
+        const Eigen::Vector<long, 4> nonZeroTuple = {1,2,0,1};
+        const Eigen::Vector<long, 4> nonZeroTuple2 = {0, 0, 1, 2};
         for (const auto& tuple : TupleIterator<SingleModulus>(d, 4)) {
             auto fValue = f_multiqudit(M, {{tuple[0],tuple[1]}, {tuple[2],tuple[3]}}, d, inv_2, omega);
             INFO("Tuple is " << tuple[0] << ", " << tuple[1] << ", " << tuple[2] << ", " << tuple[3]);

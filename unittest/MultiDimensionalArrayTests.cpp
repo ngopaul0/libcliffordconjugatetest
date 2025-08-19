@@ -16,6 +16,7 @@ using namespace cliffconjtest;
 struct SomeData {
     size_t a{};
     std::string b;
+    Eigen::Vector<long, Eigen::Dynamic> tuple;
 };
 
 TEST_CASE("MultiDimensionalArray with custom struct", "[multidimensionalarray][tupleiterator]") {
@@ -35,21 +36,46 @@ TEST_CASE("MultiDimensionalArray with custom struct", "[multidimensionalarray][t
             CHECK(item.b.empty());
         }
 
-        const std::vector<size_t> index = {1, 2};
-        auto data = A(index);
+        const Eigen::Vector<long, 2> index = {1, 2};
+        auto data = A.get(index);
         data.a = 5;
-        CHECK(A(index).a != 5);
+        CHECK(A.get(index).a != 5);
 
-        auto& dataRef = A(index);
+        auto& dataRef = A.get(index);
         dataRef.a = 5;
-        CHECK(A(index).a == 5);
+        CHECK(A.get(index).a == 5);
 
         for (const auto& tuple : A.indexIterator()) {
             if (tuple == index) {
-                CHECK(A(tuple).a == 5);
+                CHECK(A.get(tuple).a == 5);
             } else {
-                CHECK(A(tuple).a == 0);
+                CHECK(A.get(tuple).a == 0);
             }
+        }
+    }
+
+    SECTION("indexIterator has same traversal order as normal iteration") {
+        auto A = MultiDimensionalArray<SomeData, false>(2, 4);
+        for (const auto& tuple : A.indexIterator()) {
+            A.get(tuple).tuple = tuple;
+        }
+
+        auto it = A.begin();
+        for (const auto& tuple : A.indexIterator()) {
+            REQUIRE(it->tuple == A.get(tuple).tuple);
+            ++it;
+        }
+
+        size_t index = 0;
+        for (auto& val : A) {
+            val.a = index;
+            index++;
+        }
+
+        auto indexIt = A.indexIterator();
+        for (const auto& val : A) {
+            REQUIRE(A.get(*indexIt).a == val.a);
+            ++indexIt;
         }
     }
 }

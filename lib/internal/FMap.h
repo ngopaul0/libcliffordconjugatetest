@@ -143,9 +143,14 @@ struct FMap {
         return it != map_.end() ? it->second : EMPTY_PAIR_LIST;
     }
 
+    size_t getCount(const std::complex<double>& fMValue) const {
+        const auto key = FMapKey(d_, fMValue, precisionFor_r_, precisionFor_x_);
+        return getCount(key);
+    }
+
     size_t getCountOfZero() const {
-        const auto key = FMapKey(0.0, 0.0);
-        return get(key).size();
+        const auto& key = FMapKey::ZERO_KEY;
+        return getCount(key);
     }
 
     size_t getCount(const FMapKey& key) const {

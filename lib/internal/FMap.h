@@ -134,13 +134,15 @@ struct FMapKeyHash {
  * modification. Random access of list elements are not needed, and the only modifications are
  * appending elements to lists.
  */
+using MatrixCoordinate = std::vector<size_t>;
+
 struct FMap {
   private:
     const size_t d_;
     const double precisionFor_r_;
     const double precisionFor_x_;
-    std::unordered_map<FMapKey, std::vector<std::pair<size_t, size_t>>, FMapKeyHash> map_;
-    static const std::vector<std::pair<size_t, size_t>> EMPTY_PAIR_LIST;
+    std::unordered_map<FMapKey, std::vector<MatrixCoordinate>, FMapKeyHash> map_;
+    static const std::vector<MatrixCoordinate> EMPTY_PAIR_LIST;
 
   public:
     explicit FMap(size_t d, double precisionFor_r, double precisionFor_x)
@@ -154,13 +156,13 @@ struct FMap {
     auto& getMap() { return map_; }
 
     /** Inserts the entry (p,q) and returns the key used */
-    FMapKey insertEntry(size_t p, size_t q, const std::complex<double>& value) {
+    FMapKey insertEntry(const MatrixCoordinate& coordinate, const std::complex<double>& value) {
         const auto key = FMapKey(d_, value, precisionFor_r_, precisionFor_x_);
-        map_[key].emplace_back(p, q);
+        map_[key].push_back(coordinate);
         return key;
     }
 
-    const std::vector<std::pair<size_t, size_t>>& get(const FMapKey& key) const {
+    const std::vector<MatrixCoordinate>& get(const FMapKey& key) const {
         const auto it = map_.find(key);
         return it != map_.end() ? it->second : EMPTY_PAIR_LIST;
     }

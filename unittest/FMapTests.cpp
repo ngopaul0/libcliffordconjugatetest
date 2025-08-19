@@ -57,11 +57,11 @@ TEST_CASE("FMap", "[FMap]") {
     SECTION("Map insertion rounding") {
         FMap map(5, 1e-3, 1e-3);
         const auto z = std::complex<double>(4, 5);
-        auto keyFromExact = map.insertEntry(0, 0, z);
+        auto keyFromExact = map.insertEntry({0, 0}, z);
         CHECK(map.getCount(keyFromExact) == 1);
 
         auto zApprox = std::complex(3.9999, 4.9999);
-        auto keyFromApprox = map.insertEntry(0, 1, zApprox);
+        auto keyFromApprox = map.insertEntry({0, 1}, zApprox);
         CHECK_THAT(keyFromExact.x(), Catch::Matchers::WithinAbs(keyFromApprox.x(), 1e-3));
         CHECK_THAT(keyFromExact.r(), Catch::Matchers::WithinAbs(keyFromApprox.r(), 1e-3));
         CHECK(keyFromApprox == keyFromExact);
@@ -81,7 +81,7 @@ TEST_CASE("FMap", "[FMap]") {
     SECTION("Map insertion rounding - lower precision") {
         FMap map(5, 1e-2, 1e-2);
         const auto z = std::complex<double>(4, 5);
-        const auto keyFromExact = map.insertEntry(0, 0, z);
+        const auto keyFromExact = map.insertEntry({0, 0}, z);
         CHECK(map.getCount(keyFromExact) == 1);
 
         std::vector<std::complex<double>> approxKeys = {
@@ -93,7 +93,7 @@ TEST_CASE("FMap", "[FMap]") {
 
         size_t keyCount = 1;
         for (const auto& zApprox : approxKeys) {
-            const auto keyFromApprox = map.insertEntry(0, 1, zApprox);
+            const auto keyFromApprox = map.insertEntry({0, 1}, zApprox);
             keyCount++;
             CHECK_THAT(keyFromExact.x(), Catch::Matchers::WithinAbs(keyFromApprox.x(), 1e-3));
             CHECK_THAT(keyFromExact.r(), Catch::Matchers::WithinAbs(keyFromApprox.r(), 1e-3));
@@ -147,7 +147,7 @@ TEST_CASE("FMap", "[FMap]") {
         std::vector<FMapKey> Mkeys;
         for (size_t p = 0; p < M.rows(); p++) {
             for (size_t q = 0; q < M.cols(); q++) {
-                const auto key = mapM.insertEntry(p, q, f(M, p, q, inv_2, omega));
+                const auto key = mapM.insertEntry({p, q}, f(M, p, q, inv_2, omega));
                 if (!isApproxEqual(key.r(), 0.0)) {
                     Mkeys.push_back(key);
                 }
@@ -157,7 +157,7 @@ TEST_CASE("FMap", "[FMap]") {
         FMap mapMprime(d, mapAbsValPrecision, mapXPrecision);
         for (size_t p = 0; p < M.rows(); p++) {
             for (size_t q = 0; q < M.cols(); q++) {
-                const auto key = mapMprime.insertEntry(p, q, f(M, p, q, inv_2, omega));
+                const auto key = mapMprime.insertEntry({p, q}, f(M, p, q, inv_2, omega));
                 if (!isApproxEqual(key.r(), 0.0)) {
                     Mprimekeys.push_back(key);
                 }

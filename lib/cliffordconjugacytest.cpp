@@ -13,10 +13,10 @@ bool isSymplecticTransformation(size_t d, size_t s1, size_t s2, size_t s3, size_
     return safeMod(s1 * s4 - s2 * s3, d) == 1;
 }
 
-std::optional<std::pair<FMapKey, std::pair<size_t, size_t>>>
+std::optional<std::pair<FMapKey, MatrixCoordinate>>
 findLinearIndependentCoord(const size_t d, const FMap& histogramM,
                            const std::vector<FMapKey>& sortedKeysM,
-                           const std::pair<size_t, size_t>& nonZeroCoord, bool skipZeroKeys) {
+                           const MatrixCoordinate& nonZeroCoord, bool skipZeroKeys) {
 
     // Given a subset X of Z_d^2, the following holds:
     //      Let (a,b) in X be a nonzero point, (a,b) \neq (0,0).
@@ -40,11 +40,11 @@ findLinearIndependentCoord(const size_t d, const FMap& histogramM,
             continue;
         }
 
-        const auto coords = histogramM.get(key);
+        const auto& coords = histogramM.get(key);
         for (const auto& coord : coords) {
             // theDeterminant := (nonZeroCoord[1] * coord[2] - coord[1] * nonZeroCoord[2]) mod d;
             const auto determinant =
-                safeMod(nonZeroCoord.first * coord.second - coord.first * nonZeroCoord.second, d);
+                safeMod(nonZeroCoord[0] * coord[1] - coord[0] * nonZeroCoord[1], d);
             if (determinant != 0) {
                 return std::make_optional(std::make_pair(key, coord));
             }
@@ -53,10 +53,9 @@ findLinearIndependentCoord(const size_t d, const FMap& histogramM,
     return std::nullopt;
 }
 
-std::pair<size_t, size_t> applyTransformation(size_t d, const std::pair<size_t, size_t>& target,
+MatrixCoordinate applyTransformation(size_t d, const MatrixCoordinate& target,
                                               size_t x0, size_t x1, size_t x2, size_t x3) {
-    return std::make_pair((x0 * target.first + x1 * target.second) % d,
-                          (x2 * target.first + x3 * target.second) % d);
+    return {(x0 * target[0] + x1 * target[1]) % d, (x2 * target[0] + x3 * target[1]) % d};
 }
 
 /**
@@ -86,8 +85,8 @@ bool validateNecessaryCondFromLinDepPoints(const Eigen::Index d, const std::comp
                                            const FMap& histogramM, const Eigen::MatrixXcd& M_p,
                                            const Eigen::MatrixXcd& Mprime_p,
                                            const std::vector<FMapKey>& sortedKeysM,
-                                           const std::pair<size_t, size_t>& v,
-                                           const std::pair<unsigned long, unsigned long>& u,
+                                           const MatrixCoordinate& v,
+                                           const MatrixCoordinate& u,
                                            const size_t k) {
     // Testing f_M(v) = omega^k * f_{M'}(u) is trivial. But testing u = S(v) requires more work.
     //
@@ -110,22 +109,24 @@ bool validateNecessaryCondFromLinDepPoints(const Eigen::Index d, const std::comp
         if (absVal.r() == 0.0) {
             continue;
         }
-        for (const auto& [p, q] : histogramM.get(absVal)) {
+        for (const auto& coordsForAbsVal : histogramM.get(absVal)) {
+            const auto p = coordsForAbsVal[0];
+            const auto q = coordsForAbsVal[1];
             if (p == 0 && q == 0) {
                 continue;
             }
-            assert(safeMod(p * v.second - v.first * q, d) == 0);
+            assert(safeMod(p * v[1] - v[0] * q, d) == 0);
 
             // Calculate c where c*v = (p,q), so c = pv1^(-1) and c = qv2^(-1)
-            const size_t c = safeMod(p != 0 ? p * modInverse(v.first, d)
-                                            : q * modInverse(v.second, d),
+            const size_t c = safeMod(p != 0 ? p * modInverse(v[0], d)
+                                            : q * modInverse(v[1], d),
                                      d);
-            assert(safeMod(c * v.first, d) == p && safeMod(c * v.second, d) == q);
+            assert(safeMod(c * v[0], d) == p && safeMod(c * v[1], d) == q);
 
             // alpha is f_M(p,q)
             const auto& alpha = M_p(p, q);
             // beta is f_{M'}(S(p,q)), but by Lemma 10, we would need S(p,q) = S(c*v) = c*S(v) = c*u
-            const auto& beta = Mprime_p(safeMod(c * u.first, d), safeMod(c * u.second, d));
+            const auto& beta = Mprime_p(safeMod(c * u[0], d), safeMod(c * u[1], d));
             // By Lemma 10, the power of omega is
             //     [(p,q), (p',q')] = [(cv1, cv2), (p', q')]
             //                      = cv1 * q' - p' * cv2
@@ -187,7 +188,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
             }
             const auto value = f(M, p, q, inv2, omega);
             M_p(p, q) = value;
-            histogramM.insertEntry(p, q, value);
+            histogramM.insertEntry({p, q}, value);
         }
     }
 
@@ -205,7 +206,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
             Mprime_p(p, q) = f(M_prime, p, q, inv2, omega);
 
             const auto key = Mprime_p(p, q);
-            const auto mapKey = histogramMprime.insertEntry(p, q, key);
+            const auto mapKey = histogramMprime.insertEntry({p, q}, key);
             // Early histogram check
             if (histogramMprime.getCount(mapKey) > histogramM.getCount(mapKey)) {
                 return false;
@@ -255,11 +256,11 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
         throw std::invalid_argument("Missing nonzero coordinate");
     }
 
-    std::optional<std::pair<size_t, size_t>> nonZeroCoordOpt = std::nullopt;
+    std::optional<MatrixCoordinate> nonZeroCoordOpt = std::nullopt;
     {
         const auto& coords = histogramM.get(firstNonZeroKey);
         for (const auto& coord : coords) {
-            if (coord.first != 0 || coord.second != 0) {
+            if (coord[0] != 0 || coord[1] != 0) {
                 nonZeroCoordOpt = std::make_optional(coord);
                 break;
             }
@@ -293,10 +294,10 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
         // Pick a v with the least frequency
         const auto& key = firstNonZeroKey;
-        const std::pair<size_t, size_t>& v = histogramM.get(key).front();
+        const MatrixCoordinate& v = histogramM.get(key).front();
 
         // alpha_v = f_M(v)
-        const auto alpha = M_p(v.first, v.second);
+        const auto alpha = M_p(v[0], v[1]);
         assert(alpha.real() != 0.0 && alpha.imag() != 0.0);
         // The size of this is at most O(d), because if all nonzero entries have linearly dependent
         // coordinates, then all the coordinates are in a line. A line can have at most O(d) points
@@ -305,7 +306,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
         // TODO: Refactor
         for (const auto& u : possibleU) {
             // For each beta_u with the same absolute value
-            const auto& beta = Mprime_p(u.first, u.second);
+            const auto& beta = Mprime_p(u[0], u[1]);
             // Try to find integer k such that alpha_v = omega^k beta_u
             const double kTest = checkPhase(d, alpha, beta);
             const size_t k = std::round(kTest);
@@ -323,13 +324,15 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
             // We know k = [v, (p',q')] = v1q' - p'v2
             // So v1q' = k + p'v2, hence q' = v1^{-1}(k + p'v2)
-            const size_t v1Inv = modInverse(v.first, d);
+            const size_t v1Inv = modInverse(v[0], d);
             for (size_t pPrime = 0; pPrime < d; pPrime++) {
-                const size_t qPrime = safeMod(v1Inv * (k + pPrime * v.second), d);
+                const size_t qPrime = safeMod(v1Inv * (k + pPrime * v[1]), d);
 
                 // Recall that f_M(v) = omega^k * f_{M'}(u)
-                const auto [m0, m1] = v;
-                const auto [n0, n1] = u;
+                const auto m0 = v[0];
+                const auto m1 = v[1];
+                const auto n0 = u[0];
+                const auto n1 = u[1];
                 assert(isApproxEqual(M_p(m0, m1), std::pow(omega, k) * Mprime_p(n0, n1)));
 
                 // The solution to S.m = n where
@@ -368,10 +371,10 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     // Choose u and u' so that the frequencies histogramM(|u|) and histogramM(|u'|) are minimized.
     // sortedKeysM is sorted for this in increasing order, so just iterate from start.
     auto uKey = sortedKeysM[0];
-    std::pair<size_t, size_t> u = histogramM.get(uKey).front();
+    MatrixCoordinate u = histogramM.get(uKey).front();
     const auto uIndepResult = findLinearIndependentCoord(d, histogramM, sortedKeysM, u, false);
     FMapKey uPrimeKey;
-    std::pair<size_t, size_t> uPrime;
+    MatrixCoordinate uPrime;
     if (uIndepResult.has_value()) {
         uPrimeKey = uIndepResult->first;
         uPrime = uIndepResult->second;
@@ -398,32 +401,32 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
             // recover S for this particular mapping pair.
 
             const auto uPrimeDeterminant =
-                safeMod(u.first * uPrime.second - uPrime.first * u.second, d);
+                safeMod(u[0] * uPrime[1] - uPrime[0] * u[1], d);
             const auto uPrimeDetInverse = modInverse(uPrimeDeterminant, d);
             // uUprimeDeterminantInv := (u[1]*uPrime[2] - uPrime[1]*u[2]) &^(-1) mod d
 
             // Scoord[1] := (uMap[1] * uPrime[2] - u[2] * uPrimeMap[1])*uUprimeDeterminantInv mod d;
             const auto x0 = safeMod(
-                uPrimeDetInverse * (uMap.first * uPrime.second - u.second * uPrimeMap.first), d);
+                uPrimeDetInverse * (uMap[0] * uPrime[1] - u[1] * uPrimeMap[0]), d);
             // Scoord[2] := (u[1] * uPrimeMap[1] - uMap[1] * uPrime[1])*uUprimeDeterminantInv mod d;
             const auto x1 = safeMod(
-                uPrimeDetInverse * (u.first * uPrimeMap.first - uMap.first * uPrime.first), d);
+                uPrimeDetInverse * (u[0] * uPrimeMap[0] - uMap[0] * uPrime[0]), d);
             // Scoord[3] := (uMap[2] * uPrime[2] - u[2] * uPrimeMap[2])*uUprimeDeterminantInv mod d;
             const auto x2 = safeMod(
-                uPrimeDetInverse * (uMap.second * uPrime.second - u.second * uPrimeMap.second), d);
+                uPrimeDetInverse * (uMap[1] * uPrime[1] - u[1] * uPrimeMap[1]), d);
             // Scoord[4] := (u[1] * uPrimeMap[2] - uMap[2] * uPrime[1])*uUprimeDeterminantInv mod d;
             const auto x3 = safeMod(
-                uPrimeDetInverse * (u.first * uPrimeMap.second - uMap.second * uPrime.first), d);
+                uPrimeDetInverse * (u[0] * uPrimeMap[1] - uMap[1] * uPrime[0]), d);
 
             if (isSymplecticTransformation(d, x0, x1, x2, x3)) {
                 // Let alpha_v = f_M(v) and beta_v = f_{M'}(v)
-                const auto& alphaV = M_p(v.first, v.second);
-                const auto& alphaVPrime = M_p(vPrime.first, vPrime.second);
+                const auto& alphaV = M_p(v[0], v[1]);
+                const auto& alphaVPrime = M_p(vPrime[0], vPrime[1]);
 
                 const auto& betaVCoord = applyTransformation(d, v, x0, x1, x2, x3);
-                const auto& betaV = Mprime_p(betaVCoord.first, betaVCoord.second);
+                const auto& betaV = Mprime_p(betaVCoord[0], betaVCoord[1]);
                 const auto& betaVPrimeCoord = applyTransformation(d, vPrime, x0, x1, x2, x3);
-                const auto& betaVPrime = Mprime_p(betaVPrimeCoord.first, betaVPrimeCoord.second);
+                const auto& betaVPrime = Mprime_p(betaVPrimeCoord[0], betaVPrimeCoord[1]);
 
                 // Try to find integer k such that alpha_v = omega^k beta_v
                 const double kTest = checkPhase(d, alphaV, betaV);
@@ -451,11 +454,11 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                 // pPrimeFromThis := (possibleK*vPrime[1] - possibleKPrime*v[1])*inverseToUse mod d;
                 // qPrimeFromThis := (possibleK*vPrime[2] - possibleKPrime*v[2])*inverseToUse mod d;
                 const auto inverseToUse = modInverse(
-                    safeMod(v.first * vPrime.second - v.second * vPrime.first, d), d);
+                    safeMod(v[0] * vPrime[1] - v[1] * vPrime[0], d), d);
                 const auto pPrime =
-                    safeMod(inverseToUse * (k * vPrime.first - kPrime * v.first), d);
+                    safeMod(inverseToUse * (k * vPrime[0] - kPrime * v[0]), d);
                 const auto qPrime =
-                    safeMod(inverseToUse * (k * vPrime.second - kPrime * v.second), d);
+                    safeMod(inverseToUse * (k * vPrime[1] - kPrime * v[1]), d);
 
                 Eigen::Matrix2i S;
                 S << x0, x1, x2, x3;

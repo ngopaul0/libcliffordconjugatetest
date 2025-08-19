@@ -130,6 +130,8 @@ struct FMapKeyHash {
  *
  *      FMap.get(z) = { (p,q) |  |M(p,q)| = abs(z) and x_forMap(M(p,q)) = x_forMap(z) }.
  *
+ * In the n-qudigt case, f_M(p) is used where p in Z_d^(2n).
+ *
  * std::unordered_map and std::list are used to ensure average constant-time access and
  * modification. Random access of list elements are not needed, and the only modifications are
  * appending elements to lists.
@@ -145,9 +147,9 @@ struct FMap {
     std::unordered_map<FMapKey, std::vector<MatrixCoordinate>, FMapKeyHash> map_;
     static const std::vector<MatrixCoordinate> EMPTY_PAIR_LIST;
 
-    static size_t computeTupleLength(size_t numQubits) {
-        // 2^numQubits
-        return 1UL << numQubits;
+    static constexpr size_t computeTupleLength(const size_t numQubits) {
+        // 2 * numQubits
+        return 2 * numQubits;
     }
 
   public:

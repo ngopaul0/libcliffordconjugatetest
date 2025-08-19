@@ -11,17 +11,19 @@
 
 namespace cliffconjtest {
 
-inline Eigen::Matrix2i B(size_t e) {
-    Eigen::Matrix2i b = Eigen::Matrix2i::Identity();
+using Sp1ZdMatrix = Eigen::Matrix<long, 2, 2>;
+
+inline Sp1ZdMatrix B(size_t e) {
+    Sp1ZdMatrix  b = Sp1ZdMatrix::Identity();
     b(0, 1) = e;
     return b;
 }
 
-inline Eigen::Matrix2i A(size_t f, size_t modulus) {
+inline Sp1ZdMatrix A(size_t f, size_t modulus) {
     if (f == 0) {
         throw std::invalid_argument("f must be nonzero");
     }
-    Eigen::Matrix2i a = Eigen::Matrix2i::Zero();
+    Sp1ZdMatrix a = Sp1ZdMatrix::Zero();
     a(0, 0) = f;
     a(1, 1) = fastPowerMod(f, modulus - 2, modulus);
     return a;
@@ -52,7 +54,7 @@ inline Eigen::Matrix2i A(size_t f, size_t modulus) {
 class Sp1ZdMatrixIterator {
   public:
     // Required iterator type aliases for C++17 and later
-    using value_type = Eigen::Matrix2i;
+    using value_type = Sp1ZdMatrix;
     using difference_type = std::ptrdiff_t;
     using pointer = value_type*;
     using reference = value_type&;
@@ -165,30 +167,30 @@ class Sp1ZdMatrixIterator {
             return;
         }
 
-        Eigen::Matrix2i firstMatrix;
+        Sp1ZdMatrix firstMatrix;
         // The first tuple element, x, ranges from 0 <= x < d + 1, because the first value x = 0
         // represents the identity element. The rest represents the d possible matrices of the
         // form B * [[0, 1],[-1,0]
         if (current_tuple_[0] == 0) {
-            firstMatrix = Eigen::Matrix2i::Identity();
+            firstMatrix = Sp1ZdMatrix::Identity();
         } else {
-            Eigen::Matrix2i factor = Eigen::Matrix2i::Zero();
+            Sp1ZdMatrix factor = Sp1ZdMatrix::Zero();
             factor(0, 1) = 1;
             factor(1, 0) = safeMod(-1, modulus_);
             firstMatrix = B(current_tuple_[0] - 1) * factor;
         }
 
-        Eigen::Matrix2i secondMatrix = B(current_tuple_[1]);
+        Sp1ZdMatrix  secondMatrix = B(current_tuple_[1]);
 
         // The last tuple element, z, ranges from 0 <= z < d - 1, and it is meant to iterate through
         // all the units of Z_d, i.e. non-zero elements. Adding 1 will result in the range being
         // 1 <= z + 1 < d, which captures all invertible elements.
-        Eigen::Matrix2i thirdMatrix = A(current_tuple_[2] + 1, modulus_);
+        Sp1ZdMatrix  thirdMatrix = A(current_tuple_[2] + 1, modulus_);
 
-        Eigen::Matrix2i result = firstMatrix * secondMatrix * thirdMatrix;
+        Sp1ZdMatrix  result = firstMatrix * secondMatrix * thirdMatrix;
 
         result = result.array().unaryExpr(
-            [&](const int x) { return static_cast<int>(safeMod(x, modulus_)); });
+            [&](const long x) { return safeMod(x, modulus_); });
         current_matrix_ = std::make_optional(result);
     }
 };

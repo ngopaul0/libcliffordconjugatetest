@@ -205,7 +205,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     // one for M. If not, then the two don't have the same entry values.
     FMap histogramMprime(d, 1, histogramM.size(), mapAbsValPrecision, mapXPrecision);
     MpMatrixType Mprime_p(2, d);
-    for (const auto& coord : M_p.indexIterator()) {
+    for (const auto& coord : Mprime_p.indexIterator()) {
         assert(coord.size() == 2);
         const size_t p = coord[0];
         const size_t q = coord[1];
@@ -353,7 +353,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                         const auto x2 = safeMod(safeMod(n1 - m1 * x3, d) * m0_inv, d);
 
                         if (isSymplecticTransformation(d, x0, x1, x2, x3)) {
-                            Eigen::Matrix2i S;
+                            Sp1ZdMatrix S;
                             S << x0, x1, x2, x3;
                             if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p,
                                                                  Mprime_p, S)) {
@@ -467,7 +467,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                 const auto qPrime =
                     safeMod(inverseToUse * (k * vPrime(1) - kPrime * v(1)), d);
 
-                Eigen::Matrix2i S;
+                Sp1ZdMatrix S;
                 S << x0, x1, x2, x3;
                 // Verify this works for all p, q
                 // Check is worst-case O(d^2), but it will exit quickly if it finds a bad value

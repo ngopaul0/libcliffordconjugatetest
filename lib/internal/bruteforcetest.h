@@ -12,7 +12,7 @@
 namespace cliffconjtest {
 
 class Sp1ZdGates {
-    std::vector<Eigen::Matrix2i> gates;
+    std::vector<Sp1ZdMatrix> gates;
 
   public:
     explicit Sp1ZdGates(size_t d) {
@@ -23,7 +23,7 @@ class Sp1ZdGates {
         }
     }
 
-    [[nodiscard]] const std::vector<Eigen::Matrix2i>& getGates() const { return gates; }
+    [[nodiscard]] const std::vector<Sp1ZdMatrix>& getGates() const { return gates; }
 };
 
 /**
@@ -50,7 +50,7 @@ inline MpMatrixType createMpMatrix(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     return M_p;
 }
 
-using Lemma10Info = std::pair<Eigen::Matrix2i, std::pair<size_t, size_t>>;
+using Lemma10Info = std::pair<Sp1ZdMatrix, std::pair<size_t, size_t>>;
 
 template <bool ReturnOptional>
 using BruteForceReturnType = std::conditional_t<ReturnOptional, std::optional<Lemma10Info>, bool>;
@@ -75,7 +75,7 @@ constexpr bool isFound(const BruteForceReturnType<IsReturningInfo>& value) {
 
 template <bool IsReturningInfo>
 constexpr BruteForceReturnType<IsReturningInfo>
-createValueFromFound(const Eigen::Matrix2i& S, const size_t pPrime, const size_t qPrime) {
+createValueFromFound(const Sp1ZdMatrix& S, const size_t pPrime, const size_t qPrime) {
     if constexpr (IsReturningInfo) {
         return std::make_optional(std::make_pair(S, std::make_pair(pPrime, qPrime)));
     } else {
@@ -108,7 +108,7 @@ BruteForceReturnType<IsReturningInfo> bruteForceTestCliffordConjugacy(
         return notFoundValue<IsReturningInfo>();
     }
 
-    using IterableType = std::variant<const std::vector<Eigen::Matrix2i>*, const Sp1ZdMatrixRange*>;
+    using IterableType = std::variant<const std::vector<Sp1ZdMatrix>*, const Sp1ZdMatrixRange*>;
     IterableType iterable;
     // Optional to manage the lifetime of the dynamically created iterator (like dynamic stack
     // dispatch)

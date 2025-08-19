@@ -19,7 +19,7 @@ void runUniquenessTest(size_t d) {
     size_t i = 0;
 
     std::set<std::vector<int>> all_symplectic_matrices;
-    for (const Eigen::Matrix2i& S : iterator) {
+    for (const auto& S : iterator) {
         // Since Eigen matrices don't have a hash function defined, just put all elements
         // into std::vector for simplicity.
         std::vector<int> matrix_array(d * d);
@@ -45,7 +45,7 @@ TEST_CASE("Sp1ZdIterator", "[sp1zditerator]") {
             INFO("d = " << d);
             Sp1ZdMatrixRange iterator(d);
             size_t i = 0;
-            for (const Eigen::Matrix2i& S : iterator) {
+            for (const auto& S : iterator) {
                 INFO("i = " << i);
                 INFO("S =\n" << S);
 

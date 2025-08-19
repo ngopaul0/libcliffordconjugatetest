@@ -27,7 +27,7 @@ test_clifford_conjugate_lemma_10(size_t pPrime, size_t qPrime, const std::comple
                                  const Eigen::Ref<const Eigen::MatrixXcd>& M,
                                  const MultiDimensionalArray<std::complex<double>, false>& M_p,
                                  const MultiDimensionalArray<std::complex<double>, false>& Mprime_p,
-                                 const Eigen::Matrix2i& symplectic_transform) {
+                                 const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& symplectic_transform) {
     const size_t d = M.rows();
     if (d != M.cols()) {
         return false;
@@ -36,20 +36,20 @@ test_clifford_conjugate_lemma_10(size_t pPrime, size_t qPrime, const std::comple
         return false;
     }
 
-    for (size_t p = 0; p < d; p++) {
-        for (size_t q = 0; q < d; q++) {
-            // it's likely the compiler will optimize this due to Eigen's expression templates
-            const Eigen::Vector2i v(p, q);
-            Eigen::Vector2i vPrime = symplectic_transform * v;
-            vPrime = vPrime.array().unaryExpr([&](const int x) { return static_cast<int>(safeMod(x, d)); });
-            const auto& fM = M_p.getFromInt(v);
-            const auto& fMPrime = Mprime_p.getFromInt(vPrime);
-            const auto omegaTerm = std::pow(omega, symplecticProduct(d, p, q, pPrime, qPrime));
+    for (const auto& v : M_p.indexIterator()) {
+        // it's likely the compiler will optimize this due to Eigen's expression templates
+        Eigen::Vector<long, Eigen::Dynamic> vPrime = symplectic_transform * v;
+        vPrime = vPrime.array().unaryExpr([&](const long x) { return safeMod(x, d); });
+        const auto& fM = M_p.get(v);
+        const auto& fMPrime = Mprime_p.get(vPrime);
+        const auto p = v[0];
+        const auto q = v[1];
+        const auto omegaTerm = std::pow(omega, symplecticProduct(d, p, q, pPrime, qPrime));
 
-            if (!isApproxEqual(fM, omegaTerm * fMPrime)) {
-                return false;
-            }
+        if (!isApproxEqual(fM, omegaTerm * fMPrime)) {
+            return false;
         }
+
     }
 
     return true;

@@ -17,39 +17,29 @@ benchmark name                       samples       iterations    est run time
                                      std dev       low std dev   high std dev
 -------------------------------------------------------------------------------
 d=5: Non-example, Linearly
-dependent M_p                                  100             1    553.209 ms
-                                        5.43726 ms    5.42618 ms    5.45741 ms
-                                        74.0487 us    41.0959 us    120.719 us
+dependent M_p                                  100             1     552.85 ms
+                                        5.56817 ms     5.5131 ms    5.67462 ms
+                                        377.121 us    227.951 us    608.038 us
 
 d=13: Non-example, Linearly
-dependent M_p                                  100             1     4.47418 s
-                                        44.3119 ms    43.8774 ms    44.8245 ms
-                                        2.40614 ms    2.02428 ms    3.08177 ms
-
-d=13: Non-example, Linearly
-dependent M_p                                 1000             1     44.3207 s
-                                        44.3633 ms    44.2507 ms    44.4785 ms
-                                        1.83468 ms    1.76151 ms    1.92248 ms
+dependent M_p                                  100             1     4.36463 s
+                                        43.1668 ms    42.8249 ms    43.5356 ms
+                                        1.81298 ms    1.60126 ms    2.26785 ms
 
 d=11: Linearly dependent M_p --
-direct Clifford conjugation                    100             1    700.043 ms
-                                        6.97987 ms    6.94983 ms    7.05561 ms
-                                        224.348 us    108.237 us     445.73 us
+direct Clifford conjugation                    100             1    703.714 ms
+                                        6.95173 ms    6.94038 ms    6.98146 ms
+                                        86.7715 us     43.359 us    181.726 us
 
-d=11: Linearly dependent M_p                   100             1    773.821 ms
-                                        7.60669 ms    7.47878 ms    7.79942 ms
-                                        786.719 us    582.438 us    1.04617 ms
+d=11: Linearly dependent M_p                   100             1    927.708 ms
+                                        8.06232 ms    7.82549 ms    8.39918 ms
+                                        1.42185 ms    1.12441 ms    2.04895 ms
 
-d=7: Linearly dependent M_p                    100             1    93.0147 ms
-                                        859.289 us    844.422 us    908.951 us
-                                        123.926 us    43.1569 us    276.748 us
+d=7: Linearly dependent M_p                    100             1    104.383 ms
+                                        1.32855 ms    1.07067 ms    1.73831 ms
+                                        1.63881 ms    1.14578 ms    2.18102 ms
 
 d=7, Clifford-conjugate, 2 basis
-elements                                       100             1    191.192 ms
-                                        1.78733 ms    1.73317 ms    1.89657 ms
-                                        376.291 us    215.376 us    588.289 us
-
-
-===============================================================================
-test cases: 1 | 1 passed
-assertions: - none -
+elements                                       100             1    182.282 ms
+                                        1.68795 ms    1.67853 ms    1.70396 ms
+                                        61.5545 us     41.661 us    97.2099 us

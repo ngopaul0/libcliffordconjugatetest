@@ -18,38 +18,34 @@ benchmark name                       samples       iterations    est run time
 -------------------------------------------------------------------------------
 d = 5: Non-example, two linearly
 dependent Pauli basis elements
-bypassing histogram check                      100             3     2.2005 ms
-                                        10.1832 us    10.0934 us    10.3351 us
-                                        580.113 ns    401.825 ns    899.429 ns
+bypassing histogram check                      100             3     2.3271 ms
+                                        9.69166 us    9.63234 us    9.81374 us
+                                        413.305 ns    248.248 ns    688.953 ns
 
 d=13: Non-example, Linearly
-dependent M_p                                  100             1     7.2079 ms
-                                        73.4374 us    72.9171 us    74.4479 us
-                                        3.58044 us    2.15954 us    6.05115 us
+dependent M_p                                  100             1     7.4982 ms
+                                        75.6201 us    75.1172 us    76.5204 us
+                                        3.32649 us    2.18543 us    5.63177 us
 
 d=13: Non-example, with histogram
-bypass                                         100             1     7.6863 ms
-                                        76.9733 us    76.4682 us    77.9485 us
-                                        3.45784 us     2.1769 us    6.12275 us
+bypass                                         100             1     7.9026 ms
+                                        78.8949 us    78.3867 us    80.0714 us
+                                         3.7408 us    1.99303 us    7.49735 us
 
 d=5: Non-example, Linearly
-dependent M_p                                  100             4      2.412 ms
-                                         5.9807 us    5.92219 us      6.106 us
-                                        419.319 ns    229.365 ns    712.965 ns
+dependent M_p                                  100             4     2.3372 ms
+                                         5.6922 us    5.63956 us    5.79817 us
+                                        363.932 ns    196.641 ns    583.387 ns
 
-d=11: Linearly dependent M_p                   100             1     7.4349 ms
-                                        74.6229 us    74.1722 us    75.5517 us
-                                        3.17128 us    1.93871 us     5.9633 us
+d=11: Linearly dependent M_p                   100             1     7.1162 ms
+                                        71.9977 us    71.5601 us    72.8808 us
+                                        3.04569 us    1.82143 us    5.45684 us
 
-d=7: Linearly dependent M_p                    100             1     2.5827 ms
-                                        25.5841 us    25.3524 us    26.0949 us
-                                        1.67019 us    817.242 ns      2.894 us
+d=7: Linearly dependent M_p                    100             1     2.5142 ms
+                                        24.8347 us    24.6139 us    25.3715 us
+                                        1.64814 us    809.941 ns    3.17627 us
 
 d=7, Clifford-conjugate, 2 basis
-elements                                       100             1     2.4179 ms
-                                        23.8193 us    23.6391 us    24.2467 us
-                                        1.33286 us    671.466 ns    2.47363 us
-
-
-===============================================================================
-All tests passed (828 assertions in 1 test case)
+elements                                       100             1      2.315 ms
+                                        23.5019 us    23.1606 us    24.0516 us
+                                         2.1604 us    1.49033 us    3.11058 us

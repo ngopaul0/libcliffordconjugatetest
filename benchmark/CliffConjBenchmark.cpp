@@ -51,8 +51,8 @@ TEST_CASE("Brute force Clifford-conjugate test", "[benchmark][bruteforce]") {
         Eigen::MatrixXcd M = C * Mprime * Cstar;
         M(0,3) += 0.2;
 
-        Eigen::MatrixXcd M_p = createMpMatrix(M, omega, inv_2);
-        Eigen::MatrixXcd Mprime_p = createMpMatrix(Mprime, omega, inv_2);
+        auto M_p = createMpMatrix(M, omega, inv_2);
+        auto Mprime_p = createMpMatrix(Mprime, omega, inv_2);
         Sp1ZdGates gates(d);
 
         meter.measure([M, Mprime, omega, M_p, Mprime_p, gates] {
@@ -103,8 +103,8 @@ TEST_CASE("Brute force Clifford-conjugate test", "[benchmark][bruteforce]") {
         const Eigen::MatrixXcd Cstar = C.adjoint();
         const Eigen::MatrixXcd M = C * Mprime * Cstar;
 
-        Eigen::MatrixXcd M_p = createMpMatrix(M, omega, inv_2);
-        Eigen::MatrixXcd Mprime_p = createMpMatrix(Mprime, omega, inv_2);
+        auto M_p = createMpMatrix(M, omega, inv_2);
+        auto Mprime_p = createMpMatrix(Mprime, omega, inv_2);
         Sp1ZdGates gates(d);
 
         meter.measure([M, Mprime, omega, M_p, Mprime_p, gates] {
@@ -130,8 +130,8 @@ TEST_CASE("Brute force Clifford-conjugate test", "[benchmark][bruteforce]") {
         const Eigen::MatrixXcd Cstar = C.adjoint();
         const Eigen::MatrixXcd M = C * Mprime * Cstar;
 
-        Eigen::MatrixXcd M_p = createMpMatrix(M, omega, inv_2);
-        Eigen::MatrixXcd Mprime_p = createMpMatrix(Mprime, omega, inv_2);
+        auto M_p = createMpMatrix(M, omega, inv_2);
+        auto Mprime_p = createMpMatrix(Mprime, omega, inv_2);
         Sp1ZdGates gates(d);
 
         meter.measure([M, Mprime, omega, M_p, Mprime_p, gates] {
@@ -163,8 +163,8 @@ TEST_CASE("Brute force Clifford-conjugate test", "[benchmark][bruteforce]") {
         const auto Wmatrix = W(d, 1, 2, inv_2, omega);
         const Eigen::MatrixXcd M = C * Mprime * Cstar;
 
-        Eigen::MatrixXcd M_p = createMpMatrix(M, omega, inv_2);
-        Eigen::MatrixXcd Mprime_p = createMpMatrix(Mprime, omega, inv_2);
+        auto M_p = createMpMatrix(M, omega, inv_2);
+        auto Mprime_p = createMpMatrix(Mprime, omega, inv_2);
         Sp1ZdGates gates(d);
 
         meter.measure([M, Mprime, omega, M_p, Mprime_p, gates] {
@@ -383,8 +383,8 @@ TEST_CASE("Algorithm for Clifford-conjugate test", "[benchmark][algorithm]") {
         const auto Cstar = C.adjoint();
         const auto Wmatrix = W(d, 1, 2, inv_2, omega);
         const Eigen::MatrixXcd M = C * Mprime * Cstar;
-        Eigen::MatrixXcd M_p = createMpMatrix(M, omega, inv_2);
-        Eigen::MatrixXcd Mprime_p = createMpMatrix(Mprime, omega, inv_2);
+        auto M_p = createMpMatrix(M, omega, inv_2);
+        auto Mprime_p = createMpMatrix(Mprime, omega, inv_2);
 
         meter.measure([M, Mprime, omega, M_p, Mprime_p] {
             bool result = isCliffordConjugate(M, Mprime);

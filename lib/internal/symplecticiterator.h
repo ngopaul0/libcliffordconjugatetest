@@ -125,7 +125,7 @@ class Sp1ZdMatrixIterator {
      *
      * @return A reference to the current symplectic matrix
      */
-    const reference operator*() {
+    reference operator*() {
         if (isEnd()) {
             throw std::out_of_range("Sp1ZdMatrixIterator end reached");
         }

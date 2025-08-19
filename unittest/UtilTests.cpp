@@ -213,6 +213,14 @@ TEST_CASE("reduceToREFAndGetRank", "[REF]") {
 }
 
 TEST_CASE("check_phase", "[check_phase]") {
+    SECTION("Works on known case") {
+        // failed on macOS
+        const size_t d = 7;
+        const std::complex<double> v1 = {-8.11037, -6.10691}, v2 = {-8.11037,-6.10691};
+        REQUIRE_THAT(checkPhase(d, v1, v2), Catch::Matchers::WithinAbs(0, 1e-5));
+        REQUIRE_THAT(checkPhase(d, v2, v1), Catch::Matchers::WithinAbs(0, 1e-5));
+    }
+
     SECTION("Works on random cases") {
         const size_t d = 7;
         const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));

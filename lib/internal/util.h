@@ -6,8 +6,8 @@
 // Deal with Windows being different! M_PI needs this to work
 // https://learn.microsoft.com/en-us/cpp/c-runtime-library/math-constants?view=msvc-170&redirectedfrom=MSDN
 #define _USE_MATH_DEFINES
-#include <math.h>
 #include <cmath>
+#include <math.h>
 
 namespace cliffconjtest {
 
@@ -20,6 +20,15 @@ inline constexpr double pi_over_2 = M_PI_2;
 // 1 / pi
 inline constexpr double one_over_pi = M_1_PI;
 
+inline bool isApproxEqual(double a, double b, double epsilon = 1e-5) {
+    return std::abs(a - b) <= epsilon;
+}
+
+inline bool isApproxEqual(const std::complex<double> a, const std::complex<double> b,
+                          double epsilon = 1e-5) {
+    return isApproxEqual(a.real(), b.real(), epsilon) && isApproxEqual(a.imag(), b.imag(), epsilon);
+}
+
 /**
  * @brief Assuming u = omega^k * v, where omega is the dth root of unity, computes the value of k.
  *
@@ -28,7 +37,8 @@ inline constexpr double one_over_pi = M_1_PI;
  * @param v The second complex number, an instance of std::complex<double>.
  * @return A double representing the scaled phase difference.
  */
-inline double checkPhase(size_t d, const std::complex<double>& u, const std::complex<double>& v) {
+inline double checkPhase(size_t d, const std::complex<double>& u, const std::complex<double>& v,
+                         double epsilon = 1e-5) {
     // Extract real and imaginary parts from the complex numbers.
     double a1 = u.real();
     double a2 = u.imag();
@@ -67,16 +77,8 @@ inline double checkPhase(size_t d, const std::complex<double>& u, const std::com
         actualAngle += 2.0 * pi;
     }
 
-    return d * actualAngle / (2.0 * pi);
-}
-
-inline bool isApproxEqual(double a, double b, double epsilon = 1e-5) {
-    return std::abs(a - b) <= epsilon;
-}
-
-inline bool isApproxEqual(const std::complex<double> a, const std::complex<double> b,
-                          double epsilon = 1e-5) {
-    return isApproxEqual(a.real(), b.real(), epsilon) && isApproxEqual(a.imag(), b.imag(), epsilon);
+    const double result = d * actualAngle / (2.0 * pi);
+    return isApproxEqual(result, d, epsilon) ? 0.0 : result;
 }
 
 /**
@@ -102,7 +104,9 @@ inline long long fastPowerMod(unsigned long long base, unsigned long long expone
 
 // A helper function to perform modulo arithmetic that correctly handles
 // negative numbers, which is a common pitfall with C++'s % operator.
-inline long safeMod(const long val, const long modulus) { return (val % modulus + modulus) % modulus; }
+inline long safeMod(const long val, const long modulus) {
+    return (val % modulus + modulus) % modulus;
+}
 
 inline long modInverse(const long base, const size_t p) {
     // Fermat's little hteorem / Euler's theorem: a^(p-1) = 1 (mod p), so a^(p-2) = a^(-1) (mod p)
@@ -176,8 +180,8 @@ std::complex<double> f(const Eigen::Ref<const Eigen::MatrixXcd>& M, int p, int q
                        const std::complex<double>& omega);
 
 /**
- * @brief For a given d^n x d^n matrix M (d prime), it can be decomposed into a linear combination of
- * the d^(2n) Pauli basis elements W(p1,q1) ⊗ ... ⊗ W(pn,qn), where pi,qi are integers from 0 to
+ * @brief For a given d^n x d^n matrix M (d prime), it can be decomposed into a linear combination
+ * of the d^(2n) Pauli basis elements W(p1,q1) ⊗ ... ⊗ W(pn,qn), where pi,qi are integers from 0 to
  * d - 1. This function gets the coefficient of W(p1,q1) ⊗ ... ⊗ W(pn,qn) in the Pauli basis
  * decomposition of M.
  *

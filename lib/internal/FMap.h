@@ -30,10 +30,9 @@ inline double compute_x_forMap(const size_t d, const std::complex<double>& z, do
         if (isApproxEqual(z.imag(), 0.0, epsilon)) {
             return 0.0;
         }
-        // const double theta = z.imag() > 0 ? pi / 2 : 3 * pi / 2;
-        // nPlusX = static_cast<double>(d) * theta / (2 * pi);
 
-        if (z.imag() > 0) {
+        // z is pure imaginary; it's either straight up or straight down.
+        if (z.imag() >= 0.0) {
             // theta = pi/2 divided by 2*pi is 1/4
             nPlusX = static_cast<double>(d) * 0.25;
         } else {
@@ -41,7 +40,7 @@ inline double compute_x_forMap(const size_t d, const std::complex<double>& z, do
             nPlusX = static_cast<double>(d) * 0.75;
         }
     } else {
-        const double theta = atan2(z.imag(), z.real());
+        const double theta = std::arg(z);
         if (isApproxEqual(theta, 0.0, epsilon)) {
             nPlusX = 0.0;
         } else if (theta >= 0.0) {
@@ -51,6 +50,8 @@ inline double compute_x_forMap(const size_t d, const std::complex<double>& z, do
             // theta = atan(Im(z) / Re(z)) + 2*pi
             // Dividing by 2*pi would result in
             // theta / (2 * pi) = 1/(2*pi) atan(Im(z) / Re(z)) + 1
+            //
+            // Pre-compute certain parts to reduce error propagation.
             nPlusX = static_cast<double>(d) * theta / (2 * pi) + static_cast<double>(d);
         }
     }
@@ -65,10 +66,13 @@ inline double compute_x_forMap(const size_t d, const std::complex<double>& z, do
     } else {
         roundedX = roundMapKey(x, epsilon);
     }
-
+#ifndef NDEBUG
+    // compiler probably detects and optimizes this, but just be absolutely certain it's not
+    // compiled for Release builds
     const auto rhs =
         abs(z) * std::exp(std::complex<double>(0, 2 * pi / static_cast<double>(d) * (n + x)));
     assert(isApproxEqual(z, rhs, epsilon));
+#endif
     return roundedX;
 }
 

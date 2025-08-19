@@ -471,4 +471,10 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     return false;
 }
 
+bool isCliffordConjugateGeneralized(const std::size_t d, const std::size_t n,
+                                    const Eigen::Ref<const Eigen::MatrixXcd>& M,
+                                    const Eigen::Ref<const Eigen::MatrixXcd>& M_prime) {
+    return false;
+}
+
 } // namespace cliffconjtest

@@ -28,6 +28,10 @@ namespace cliffconjtest {
 bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                          const Eigen::Ref<const Eigen::MatrixXcd>& M_prime);
 
+bool isCliffordConjugateGeneralized(std::size_t d, std::size_t n,
+                                    const Eigen::Ref<const Eigen::MatrixXcd>& M,
+                                    const Eigen::Ref<const Eigen::MatrixXcd>& M_prime);
+
 } // namespace cliffconjtest
 
 #endif // CLIFFORDCONJUGATETEST_LIBRARY_H

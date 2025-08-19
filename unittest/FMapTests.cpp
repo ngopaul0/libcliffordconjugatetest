@@ -14,7 +14,21 @@ using namespace cliffconjtest;
 
 TEST_CASE("FMap", "[FMap]") {
     constexpr double mapAbsValPrecision = 1e-5;
-    constexpr double mapXPrecision = 1e-3;
+    constexpr double mapXPrecision = 1e-6;
+
+    SECTION("Key rounding edge case 1") {
+        const auto z = std::complex<double>(0.99999999999999966, 0.00000000000000057731597280508142);
+        const auto key = FMapKey(5, z, mapAbsValPrecision, mapXPrecision);
+        CHECK(key.r() == 1.0);
+        CHECK(key.x() == 0.0);
+    }
+
+    SECTION("Key rounding edge case 2") {
+        const auto z = std::complex<double>(4, 5);
+        const auto key = FMapKey(5, z, 1e-5, 1e-3);
+        CHECK(key.r() == 6.40312);
+        CHECK(key.x() == 0.713);
+    }
 
     SECTION("d=5, known result") {
         const int d = 5; // Example dimension

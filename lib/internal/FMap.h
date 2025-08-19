@@ -13,7 +13,14 @@
 
 namespace cliffconjtest {
 
-inline double compute_x_forMap(const size_t d, const std::complex<double>& z) {
+inline double roundMapKey(double key, double epsilon) {
+    if (epsilon == 0.0) {
+        return key;
+    }
+    return std::round(key / epsilon) * epsilon;
+}
+
+inline double compute_x_forMap(const size_t d, const std::complex<double>& z, double epsilon) {
     // First express z as z = r * exp(i * theta).
     // Then to express z = r * exp(2*pi*i/d * (n + x)), from z = r * exp(i * theta) we conclude
     // theta = 2*pi/d * (n + x), so n + x = d * theta / (2 * pi)
@@ -34,29 +41,33 @@ inline double compute_x_forMap(const size_t d, const std::complex<double>& z) {
         }
     } else {
         const double theta = atan2(z.imag(), z.real());
-        if (theta < 0) {
+        if (std::abs(theta) < epsilon) {
+            nPlusX = 0.0;
+        } else if (theta >= 0.0) {
+            nPlusX = static_cast<double>(d) * theta / (2 * pi);
+        } else {
             // atan2 has range (-pi, pi]. Normalize negative angles by adding 2 * pi
             // theta = atan(Im(z) / Re(z)) + 2*pi
             // Dividing by 2*pi would result in
             // theta / (2 * pi) = 1/(2*pi) atan(Im(z) / Re(z)) + 1
             nPlusX = static_cast<double>(d) * theta / (2 * pi) + static_cast<double>(d);
-        } else {
-            nPlusX = static_cast<double>(d) * theta / (2 * pi);
         }
     }
 
     double n;
     double x = std::modf(nPlusX, &n);
-    assert(isApproxEqual(
-        z, abs(z) * std::exp(std::complex<double>(0, 2 * pi / static_cast<double>(d) * (n + x)))));
-    return x;
-}
-
-inline double roundMapKey(double key, double epsilon) {
-    if (epsilon == 0.0) {
-        return key;
+    double roundedX;
+    if (isApproxEqual(x, 1.0, epsilon)) {
+        // x is constrained to be in [0,1) for uniqueness
+        // n += 1;
+        roundedX = 0.0;
+    } else {
+        roundedX = roundMapKey(x, epsilon);
     }
-    return std::round(key / epsilon) * epsilon;
+
+    const auto rhs = abs(z) * std::exp(std::complex<double>(0, 2 * pi / static_cast<double>(d) * (n + x)));
+    assert(isApproxEqual(z, rhs), epsilon);
+    return roundedX;
 }
 
 /**
@@ -78,7 +89,7 @@ class FMapKey {
     FMapKey(const size_t d, const std::complex<double>& z, const double precisionFor_r,
             const double precisionFor_x)
         : r_(roundMapKey(std::abs(z), precisionFor_r)),
-          x_(r_ != 0.0 ? roundMapKey(compute_x_forMap(d, z), precisionFor_x) : 0.0) {}
+          x_(r_ != 0.0 ? compute_x_forMap(d, z, precisionFor_x) : 0.0) {}
 
     [[nodiscard]] double r() const { return r_; }
     [[nodiscard]] double x() const { return x_; }

@@ -64,7 +64,8 @@ constexpr bool isVariableModuli = ModuliType == __VariableModuliRef || ModuliTyp
  *     f(tuple[0], tuple[1], tuple[2], tuple[3]);
  * }
  * \endcode
- * For a generalization of Z_m^n, pass false to the template parameter. For example, for Z_3^4:
+ * For a generalization of Z_m^n, pass SingleModulus to the template parameter. For example, for
+ * Z_3^4:
  * \code
  * size_t modulus = 3;
  * for (size_t a = 0; a < modulus; a++) {
@@ -80,7 +81,7 @@ constexpr bool isVariableModuli = ModuliType == __VariableModuliRef || ModuliTyp
  * can just be replaced with
  * \code
  * size_t modulus = 3;
- * for (const auto& tuple : TupleIterator<false>(modulus, 4)) {
+ * for (const auto& tuple : TupleIterator<SingleModulus>(modulus, 4)) {
  *     f(tuple[0], tuple[1], tuple[2], tuple[3]);
  * }
  * \endcode
@@ -187,7 +188,7 @@ class TupleIterator : OptionalField<Type> {
             } else {
                 // If it has, reset to 0 and continue to the next dimension to the left
                 // e.g. the example should be incremented in the next iteration (0, 1, 0) and then
-                // break
+                // break on the next iteration.
                 current_tuple_[i] = 0;
 
                 // Can't roll over to anything else; iteration is complete

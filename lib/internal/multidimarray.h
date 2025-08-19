@@ -30,7 +30,10 @@ struct OptionalArrayField<false> {
 /**
  * A class for multidimensional arrays, where each dimension can have a variable size.
  * @tparam T The type to store
- * @tparam UseVariableDimension Whether each coordinate in the array can have a different dimension.
+ * @tparam UseVariableDimension Whether each each dimension can have a variable size, e.g. indices
+ * over Z_2 x Z_3 x Z_4 have different sizes, while indices over Z_3 x Z_3 x Z_3 = Z_3^3 have a
+ * uniform size. Using UseVariableDimension == false will result in slightly less memory, as an
+ * array for the dimensions doesn't need to be allocated.
  */
 template <typename T, bool UseVariableDimension>
 class MultiDimensionalArray : OptionalArrayField<UseVariableDimension> {
@@ -52,7 +55,7 @@ class MultiDimensionalArray : OptionalArrayField<UseVariableDimension> {
 
         // Pre-increment
         iterator& operator++() {
-            ptr_++;
+            ++ptr_;
             return *this;
         }
 
@@ -65,7 +68,7 @@ class MultiDimensionalArray : OptionalArrayField<UseVariableDimension> {
 
         // Pre-decrement
         iterator& operator--() {
-            ptr_--;
+            --ptr_;
             return *this;
         }
 
@@ -106,6 +109,7 @@ class MultiDimensionalArray : OptionalArrayField<UseVariableDimension> {
         bool operator>=(const iterator& other) const { return !(*this < other); }
 
       private:
+        // A pointer to the underlying array.
         pointer ptr_;
     };
 
@@ -128,7 +132,7 @@ class MultiDimensionalArray : OptionalArrayField<UseVariableDimension> {
         }
         size_t index = 0;
         size_t multiplier = 1;
-        // Stores data like expansion of a variable-base expansion of number
+        // The index is like expansion of a (possibly variable-) base expansion of an integer
         for (int i = numDimensions - 1; i >= 0; i--) {
             size_t thisDimension;
             if constexpr (UseVariableDimension) {

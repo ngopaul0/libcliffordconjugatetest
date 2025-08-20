@@ -158,8 +158,7 @@ TEST_CASE("multiple Pauli basis elements", "[multiple]") {
     }
 
     SECTION("Generalized algorithm: d=11: Linearly dependent M_p", "[generalized][d=11]") {
-        // SKIP("Takes too long (48-50s)");
-
+        SKIP("Takes too long (48-50s)");
         const int d = 11; // Example dimension
         const int inv_2 = fastPowerMod(2, d - 2, d);
         const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));

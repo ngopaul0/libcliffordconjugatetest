@@ -487,7 +487,7 @@ Eigen::MatrixXcd computeMSum(size_t d, std::vector<std::pair<long, long>> coords
 
 TEST_CASE("Multi qudit case", "[multiqudit]") {
     SECTION("d=3, 2 qudits", "[generalized][d=3][n=2]") {
-        const int d = 3; // Example dimension
+        const int d = 3;
         const size_t n = 2;
         const int inv_2 = modInverse(2, d);
         const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));
@@ -562,5 +562,28 @@ TEST_CASE("Multi qudit case", "[multiqudit]") {
         REQUIRE(test_clifford_conjugate_lemma_10(d, pPrimeQPrimeVec, omega, M, M_p, Mprime_p, S));
 
         REQUIRE(isCliffordConjugateGeneralized(d, n, M, Mprime));
+    }
+
+    SECTION("d=3, 2 qudits, nonexample", "[generalized][d=3][n=2][nonexample]") {
+        const int d = 3;
+        const size_t n = 2;
+        const int inv_2 = modInverse(2, d);
+        const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));
+        constexpr std::complex<double> complexFor2ndTuple = {-1, 3};
+        const std::vector<std::pair<long, long>> coords1 = {{1,2}, {0,1}, {2,2}};
+        const std::vector<std::pair<long, long>> coords2 = {{2,1}, {2,0}};
+
+        const Eigen::MatrixXcd M1 = computeMSum(d, coords1, inv_2, omega);
+        const Eigen::MatrixXcd M2 = computeMSum(d, coords2, inv_2, omega);
+        const Eigen::MatrixXcd M = Eigen::kroneckerProduct(M1, M2);
+
+        const Eigen::MatrixXcd C1 = cliffordPermutationGate(d, 2);
+        const Eigen::MatrixXcd C2 = W(d, 2,2, inv_2, omega) * makeZX(d, 2, 1);
+        const Eigen::MatrixXcd C = Eigen::kroneckerProduct(C1, C2);
+        Eigen::MatrixXcd Mprime = C * M * C.adjoint();
+
+        Mprime(1, 1) += 0.5;
+
+        REQUIRE(!isCliffordConjugateGeneralized(d, n, M, Mprime));
     }
 }

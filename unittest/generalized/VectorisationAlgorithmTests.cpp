@@ -8,6 +8,8 @@
 
 #include "catch2/matchers/catch_matchers.hpp"
 #include "generalized/vectorisationalgorithm.h"
+#include "internal/bruteforcetest.h"
+#include "internal/cliffordgates.h"
 #include "internal/tupleiterator.h"
 
 using namespace cliffconjtest;
@@ -165,5 +167,46 @@ TEST_CASE("vectorisation", "[vectorisationalgorithm]") {
                               0, 0, 0, 0, 0;
         REQUIRE(expectedState3RREF == system);
         // It's clear the solution of this system gets back S
+
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> fromSystemS = recoverSFromSystem(system, n);
+        REQUIRE(fromSystemS == S);
+    }
+
+
+}
+
+TEST_CASE("findSymplecticMatrix", "[vectorisationalgorithm][findSymplecticMatrix]") {
+    SECTION("d = 3: Two Pauli basis elements") {
+        const int d = 3; // Example dimension
+        const int n = 1;
+        const int inv_2 = modInverse(2, d);
+        const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));
+        const Eigen::MatrixXcd Mprime = W(d, 1, 2, inv_2, omega) + W(d, 1, 1, inv_2, omega);
+
+        const Eigen::MatrixXcd C = cliffordPermutationGate(d, 2);
+        const Eigen::MatrixXcd Cstar = C.adjoint();
+        const Eigen::MatrixXcd M = C * Mprime * Cstar;
+
+        FMap MMap(d, n, 1e-5, 1e-5);
+        for (const auto& tuple : TupleIterator<SingleModulus>(d, 2)) {
+            const auto fM = f_multiqudit(M, tuple, d, inv_2, omega);
+            MMap.insertEntry(tuple, fM);
+        }
+
+        FMap MprimeMap(d, n, 1e-5, 1e-5);
+        for (const auto& tuple : TupleIterator<SingleModulus>(d, 2)) {
+            const auto fM = f_multiqudit(Mprime, tuple, d, inv_2, omega);
+            MprimeMap.insertEntry(tuple, fM);
+        }
+
+        const auto M_p = createMpMatrix(M, omega, inv_2);
+        const auto Mprime_p = createMpMatrix(Mprime, omega, inv_2);
+        std::optional<Lemma10Info> bruteForceResult = bruteForceTestCliffordConjugacy<true>(M, Mprime, omega, M_p, Mprime_p);
+        REQUIRE(bruteForceResult.has_value());
+        const auto S = bruteForceResult.value().first;
+
+        auto result = findSymplecticMatrix(d, n, MMap, MprimeMap);
+        REQUIRE(result.has_value());
+        CHECK(result.value() == S);
     }
 }

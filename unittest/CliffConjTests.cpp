@@ -423,6 +423,60 @@ TEST_CASE("multiple Pauli basis elements", "[multiple]") {
     }
 }
 
+TEST_CASE("generalized algorithm slow cases", "[generalized][slow]") {
+    SECTION("d=11: Linearly dependent M_p") {
+        const int d = 11; // Example dimension
+        const int inv_2 = fastPowerMod(2, d - 2, d);
+        const std::complex<double> omega =
+            std::exp(std::complex<double>(0, 2.0 * pi / d));
+        const Eigen::MatrixXcd Mprime = W(d, 1, 2, inv_2, omega) + W(d, 2, 4, inv_2, omega)
+            + W(d, 3, 6, inv_2, omega) +  W(d, 4, 8, inv_2, omega) +  W(d, 7, 14, inv_2, omega);
+
+        const Eigen::MatrixXcd C = W(d, 3, 4, inv_2, omega) * cliffordPermutationGate(d, 7);
+        const Eigen::MatrixXcd Cstar = C.adjoint();
+        const Eigen::MatrixXcd M = C * Mprime * Cstar;
+        bool isCliffordConjugate = isCliffordConjugateGeneralized(d, 1, M, Mprime);
+        REQUIRE(isCliffordConjugate);
+    }
+
+    SECTION("d=7: Linearly dependent M_p", "[generalized][d=7]") {
+        const int d = 7;
+        const int inv_2 = fastPowerMod(2, d - 2, d);
+        const std::complex<double> omega =
+            std::exp(std::complex<double>(0, 2.0 * pi / d));
+        const Eigen::MatrixXcd Mprime = W(d, 1, 2, inv_2, omega) + W(d, 2, 4, inv_2, omega)
+            + W(d, 3, 6, inv_2, omega) +  W(d, 4, 8, inv_2, omega);
+
+        const Eigen::MatrixXcd C = W(d, 2, 3, inv_2, omega) *cliffordPermutationGate(d, 2);
+        const Eigen::MatrixXcd Cstar = C.adjoint();
+        const Eigen::MatrixXcd M = C * Mprime * Cstar;
+
+        bool isCliffordConjugate = isCliffordConjugateGeneralized(d, 1, M, Mprime);
+        REQUIRE(isCliffordConjugate);
+    }
+
+    SECTION("Generalized: d=7, Clifford-conjugate, 2 basis elements", "[generalized][d=7]") {
+        const int d = 7; // Example dimension
+        const int inv_2 = fastPowerMod(2, d - 2, d);
+        const std::complex<double> omega =
+            std::exp(std::complex<double>(0, 2.0 * pi / d));
+
+        const Eigen::MatrixXcd W1 = W(d, 1, 2, inv_2, omega);
+        const Eigen::MatrixXcd W2 = W(d, 1, 1, inv_2, omega);
+        const Eigen::MatrixXcd Mprime = W1 + W2;
+
+        const auto X = makeX(d, 2);
+        const auto cliffordGate = cliffordPermutationGate(d, 2);
+        const Eigen::MatrixXcd C = cliffordGate * X;
+        const auto Cstar = C.adjoint();
+        const auto Wmatrix = W(d, 1, 2, inv_2, omega);
+        const Eigen::MatrixXcd M = C * Mprime * Cstar;
+
+        bool isCliffordConjugate = isCliffordConjugateGeneralized(d, 1, M, Mprime);
+        REQUIRE(isCliffordConjugate);
+    }
+}
+
 Eigen::MatrixXcd computeMSum(size_t d, std::vector<std::pair<long, long>> coords, size_t inv_2, const std::complex<double>& omega) {
     Eigen::MatrixXcd sum = Eigen::MatrixXcd::Zero(d, d);
     for (const auto& [p, q] : coords) {

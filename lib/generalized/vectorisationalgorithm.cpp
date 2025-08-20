@@ -13,6 +13,9 @@ namespace cliffconjtest {
 using CliffPermutationSysMatrix = Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>;
 using PPrimeQPrimeSysMatrix = Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>;
 
+using MappingHistory = std::unordered_map<size_t, std::vector<std::pair<size_t, size_t>>>;
+using AllowedVecMIndicesByKey = std::unordered_map<size_t, std::unordered_set<size_t>>;
+
 static size_t s_numRecursiveCalls = 0;
 
 size_t returnLastNumRecursiveCalls() { return s_numRecursiveCalls; }
@@ -21,7 +24,10 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
     const size_t d, const size_t n, const std::complex<double>& omega,
     const Eigen::Ref<const Eigen::MatrixXcd>& M, const MpMatrixType& M_p,
     const MpMatrixType& Mprime_p, const FMap& Mmap, const FMap& Mprimemap,
-    const std::vector<FMapKey>& sortedKeys, size_t& maxKeyIndex, const size_t lastKeyIndex = 0,
+    const std::vector<FMapKey>& sortedKeys, size_t& maxKeyIndex,
+    AllowedVecMIndicesByKey& allowedKeys,
+    const MappingHistory& history = {},
+    const size_t lastKeyIndex = 0,
     std::optional<CliffPermutationSysMatrix>&& systemForS = std::nullopt,
     std::optional<PPrimeQPrimeSysMatrix>&& systemForPPrimeQPrime = std::nullopt,
     std::unordered_set<size_t>&& selectedVecMIndices = {}, std::unordered_set<size_t>&& selectedVecMprimeIndices = {},
@@ -55,6 +61,11 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
             continue;
         }
         const auto& v = vecsM[i];
+        if (!allowedKeys.empty()) {
+            if (!allowedKeys[lastKeyIndex].contains(i)) {
+                continue;
+            }
+        }
         // Test the validity of a symplectic matrix mapping v to vMap
         for (size_t j = 0; j < vecsMprime.size(); ++j) {
             if (selectedVecMprimeIndices.contains(j)) {
@@ -127,15 +138,20 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
                 // debugger with i = 4, j = 0 on d=3, 2 qudits test
                 // goes to i = 4, j = 1 (target is j=2), foundCount == 4
                 auto alLVecs = ss.str();
-                if (vMap(0) == 2 && vMap(1) == 1 && vMap(2) == 2 && vMap(3) == 1) {
-                    std::stringstream ss2;
+                if (vMap.rows() >= 4) {
+                    if (vMap(0) == 2 && vMap(1) == 1 && vMap(2) == 2 && vMap(3) == 1) {
+                        std::stringstream ss2;
+                    }
                 }
             }
 
-            if (v(0) == 2 && v(1) == 2 && v(2) == 2 && v(3) == 0 &&
+            if (v.rows() >= 4) {
+                if (v(0) == 2 && v(1) == 2 && v(2) == 2 && v(3) == 0 &&
                 vMap(0) == 1 && vMap(1) == 1 && vMap(2) == 2 && vMap(3) == 0) {
-                std::stringstream ss;
+                    std::stringstream ss;
+                }
             }
+
 
 #endif
             CliffPermutationSysMatrix systemSForPair;
@@ -191,6 +207,14 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
                     // Found vectors that are linearly independent; do not look at other keys.
                     // This is a reference, so it's maintained across all recursive calls.
                     maxKeyIndex = lastKeyIndex;
+                    if (allowedKeys.empty()) {
+                        allowedKeys[lastKeyIndex].insert(i);
+                        for (auto& [key, vec] : history) {
+                            for (const auto& vInd : vec | std::views::keys) {
+                                allowedKeys[key].insert(vInd);
+                            }
+                        }
+                    }
                     Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> S =
                         recoverSFromSystem(rrefSystem, n);
 
@@ -214,7 +238,7 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
                     }
                     continue;
                 }
-                if (isSystemInconsistent(systemSForPair)) {
+                if (rank > 2 * n * 2 * n || isSystemInconsistent(rrefSystem)) {
                     continue;
                 }
 
@@ -231,6 +255,9 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
 
             std::unordered_set<size_t> thisSelectedMprime = selectedVecMprimeIndices;
             thisSelectedMprime.insert(j);
+
+            MappingHistory thisHistory = history;
+            thisHistory[lastKeyIndex].push_back({i, j});
 #ifndef NDEBUG
             std::vector<long> vVec;
             for (size_t ind = 0; ind < v.size(); ind++) {
@@ -246,7 +273,7 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
             newMappings.push_back({std::move(vVec), std::move(vMapVec)});
 #endif
             const auto recursiveResult = findSymplecticMatrixRecurse(
-                d, n, omega, M, M_p, Mprime_p, Mmap, Mprimemap, sortedKeys, maxKeyIndex,
+                d, n, omega, M, M_p, Mprime_p, Mmap, Mprimemap, sortedKeys, maxKeyIndex, allowedKeys, thisHistory,
                 lastKeyIndex, std::make_optional(systemSForPair),
                 std::make_optional(systemPPrimeQPrimeForPair), std::move(thisSelected), std::move(thisSelectedMprime), std::move(newMappings));
             if (recursiveResult) {
@@ -258,7 +285,8 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
     }
 
     return findSymplecticMatrixRecurse(
-        d, n, omega, M, M_p, Mprime_p, Mmap, Mprimemap, sortedKeys, maxKeyIndex,
+        d, n, omega, M, M_p, Mprime_p, Mmap, Mprimemap, sortedKeys, maxKeyIndex, allowedKeys,
+        history,
         /* Advance the key index; unable to find in current bin */ lastKeyIndex + 1,
         std::move(thisSystemForS), std::move(thisSystemForPPrimeQPrime), {}, {}, {});
 }
@@ -272,8 +300,9 @@ findSymplecticMatrix(const size_t d, const size_t n, const std::complex<double>&
     s_numRecursiveCalls = 0;
 
     size_t maxKeyIndex = Mmap.size() - 1;
+    AllowedVecMIndicesByKey allowedKeys;
     return findSymplecticMatrixRecurse(d, n, omega, M, M_p, Mprime_p, Mmap, Mprimemap, sortedKeys,
-                                       maxKeyIndex);
+                                       maxKeyIndex, allowedKeys);
 }
 
 } // namespace cliffconjtest

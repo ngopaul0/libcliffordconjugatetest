@@ -187,6 +187,17 @@ struct FMap {
         return it != map_.end() ? it->second : EMPTY_PAIR_LIST;
     }
 
+    /**
+     * @return Mutable reference
+     */
+    std::optional<std::reference_wrapper<std::vector<MatrixCoordinate>>> getMut(const FMapKey& key) {
+        const auto it = map_.find(key);
+        if (it == map_.end()) {
+            return std::nullopt;
+        }
+        return std::optional(std::ref(it->second));
+    }
+
     size_t getCount(const std::complex<double>& fMValue) const {
         const auto key = FMapKey(d_, fMValue, precisionFor_r_, precisionFor_x_);
         return getCount(key);

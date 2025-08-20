@@ -209,11 +209,89 @@ auto directSum(const Eigen::MatrixBase<DerivedA>& A, const Eigen::MatrixBase<Der
     long m_rows = B.rows();
     long m_cols = B.cols();
 
-    Eigen::Matrix<typename DerivedA::Scalar, Eigen::Dynamic, Eigen::Dynamic> C(n_rows + m_rows, n_cols + m_cols);
+    Eigen::Matrix<typename DerivedA::Scalar, Eigen::Dynamic, Eigen::Dynamic> C(n_rows + m_rows,
+                                                                               n_cols + m_cols);
     C.setZero();
     C.topLeftCorner(n_rows, n_cols) = A;
     C.bottomRightCorner(m_rows, m_cols) = B;
     return C;
+}
+
+/**
+ * @return Whether the 2n x 2n matrix M is essentially a block diagonal matrix (2x2 blocks)
+ * with symplectic matrices as the diagonal blocks
+ */
+inline bool checkIfBlockDiagonalAndEachBlockSymplectic(const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& M, size_t d) {
+    // Get the dimensions of the matrix.
+    long rows = M.rows();
+    long cols = M.cols();
+    assert(rows % 2 == 0);
+    assert(rows == cols);
+
+    // Determine the number of blocks, which is n.
+    const long n = rows / 2;
+    constexpr long blockSize = 2; // The size of each block is 2x2.
+
+    // Check if all off-block-diagonal elements in the matrix are zero.
+    // e.g., Consider
+    // [2 0 0 0]
+    // [0 2 0 0]
+    // [0 0 1 0]
+    // [0 0 0 1]
+    // Each 2x2 block is a symplectic matrix over Z_d, and all off-block-diagonal elements are 0
+    for (int i = 0; i < n; ++i) {
+        long startRow = i * blockSize;
+        long startCol = i * blockSize;
+
+        long rowIndexToCheck = blockSize * i;
+        long rowIndexToCheck2 = blockSize * i + 1;
+        // If n = 2, then
+        //
+        // i = 9:
+        // [2 0 0 0] <- rowIndexToCheck
+        // [0 2 0 0] <- rowIndexToCheck2
+        // [0 0 1 0]
+        // [0 0 0 1]
+        //
+        // i = 1
+        // [2 0 0 0]
+        // [0 2 0 0]
+        // [0 0 1 0] <- rowIndexToCheck
+        // [0 0 0 1] <- rowIndexToCheck2
+        for (int c = 0; c < cols; ++c) {
+            if (c >= startCol && c < startCol + blockSize) {
+                continue;
+            }
+
+            bool inCurrentBlock = (rowIndexToCheck >= startRow && rowIndexToCheck < startRow + blockSize);
+            // If the element is not in any of the diagonal blocks and is not zero, the matrix is not block diagonal.
+            if (!inCurrentBlock && M(rowIndexToCheck, c) != 0) {
+                return false;
+            }
+            inCurrentBlock = (rowIndexToCheck2 >= startRow && rowIndexToCheck2 < startRow + blockSize);
+            if (!inCurrentBlock && M(rowIndexToCheck2, c) != 0) {
+                return false;
+            }
+        }
+    }
+
+    // Iterate through the matrix to check for both conditions.
+    for (long i = 0; i < n; ++i) {
+        // Define the starting row and column for the current block.
+        long startRow = i * blockSize;
+        long startCol = i * blockSize;
+
+        // Extract the 2x2 block from the matrix.
+        Eigen::Matrix<long, 2, 2> block = M.block<blockSize, blockSize>(startRow, startCol);
+
+        long long det = safeMod(block.determinant(), d);
+
+        // Check if the determinant modulo d is 1.
+        if (det != 1) {
+            return false;
+        }
+    }
+    return true;
 }
 
 inline bool isSymplectic(const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& S,
@@ -224,7 +302,10 @@ inline bool isSymplectic(const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynami
     if (n == 1) {
         return safeMod(S(0, 0) * S(1, 1) - S(0, 1) * S(1, 0), d) == 1;
     }
+    // TODO: Figure out the symplectic form for tensor product matrices?
+    return checkIfBlockDiagonalAndEachBlockSymplectic(S, d);
 
+    /*
     // Construct the standard symplectic matrix, J
     Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> J =
         Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>::Zero(2 * n, 2 * n);
@@ -248,6 +329,7 @@ inline bool isSymplectic(const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynami
     auto lhsString = sssLhs.str();
 #endif
     return lhs == J;
+    */
 }
 
 size_t returnLastNumRecursiveCalls();
@@ -255,7 +337,7 @@ size_t returnLastNumRecursiveCalls();
 std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>>
 findSymplecticMatrix(size_t d, size_t n, const std::complex<double>& omega,
                      const Eigen::Ref<const Eigen::MatrixXcd>& M, const MpMatrixType& M_p,
-                     const MpMatrixType& Mprime_p, const FMap& Mmap, const FMap& Mprimemap);
+                     const MpMatrixType& Mprime_p, FMap& Mmap, FMap& Mprimemap);
 
 } // namespace cliffconjtest
 

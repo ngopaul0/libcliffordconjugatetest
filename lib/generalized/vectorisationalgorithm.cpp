@@ -63,7 +63,7 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
 
             const auto& vMap = vecsMprime[j];
 #ifndef NDEBUG
-            /*
+
             size_t foundCount = 0;
             for (const auto& mapping : mappings) {
                 std::vector<long> e1 = {1, 2, 2, 1};
@@ -115,13 +115,17 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
             ssV << v;
             auto stringV = ssV.str();
 
+            std::stringstream ssVmap;
+            ssVmap << vMap;
+            auto stringVmap = ssVmap.str();
+
             if (foundCount > 0 && mappings.size() == foundCount) {
                 std::stringstream ss;
                 for (const auto& vv : vecsMprime) {
                     ss << vv << ", " << std::endl;
                 }
                 // debugger with i = 4, j = 0 on d=3, 2 qudits test
-                // goes to i = 4, j = 1 (target is j=2)
+                // goes to i = 4, j = 1 (target is j=2), foundCount == 4
                 auto alLVecs = ss.str();
                 if (vMap(0) == 2 && vMap(1) == 1 && vMap(2) == 2 && vMap(3) == 1) {
                     std::stringstream ss2;
@@ -133,10 +137,6 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
                 std::stringstream ss;
             }
 
-            std::stringstream ssVmap;
-            ssVmap << vMap;
-            auto stringVmap = ssVmap.str();
-            */
 #endif
             CliffPermutationSysMatrix systemSForPair;
             PPrimeQPrimeSysMatrix systemPPrimeQPrimeForPair;
@@ -214,7 +214,6 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
                     }
                     continue;
                 }
-
                 if (isSystemInconsistent(systemSForPair)) {
                     continue;
                 }
@@ -267,7 +266,7 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
 std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>>
 findSymplecticMatrix(const size_t d, const size_t n, const std::complex<double>& omega,
                      const Eigen::Ref<const Eigen::MatrixXcd>& M, const MpMatrixType& M_p,
-                     const MpMatrixType& Mprime_p, const FMap& Mmap, const FMap& Mprimemap) {
+                     const MpMatrixType& Mprime_p, FMap& Mmap, FMap& Mprimemap) {
     const std::vector<FMapKey> sortedKeys = Mmap.sortedKeys();
 
     s_numRecursiveCalls = 0;

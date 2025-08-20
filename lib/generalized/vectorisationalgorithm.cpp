@@ -3,6 +3,7 @@
 #include <Eigen/src/Core/Matrix.h>
 #include <Eigen/src/Core/util/Constants.h>
 #include <optional>
+#include <random>
 #include <unordered_set>
 
 #include "internal/FMap.h"
@@ -272,6 +273,21 @@ findSymplecticMatrix(const size_t d, const size_t n, const std::complex<double>&
     s_numRecursiveCalls = 0;
 
     size_t maxKeyIndex = Mmap.size() - 1;
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    for (const auto& key : sortedKeys) {
+        auto vecM = Mmap.getMut(key);
+        if (vecM) {
+            std::ranges::shuffle(vecM->get(), gen);
+        }
+
+        auto vecMprime = Mprimemap.getMut(key);
+        if (vecMprime) {
+            std::ranges::shuffle(vecMprime->get(), gen);
+        }
+    }
+
     return findSymplecticMatrixRecurse(d, n, omega, M, M_p, Mprime_p, Mmap, Mprimemap, sortedKeys,
                                        maxKeyIndex);
 }

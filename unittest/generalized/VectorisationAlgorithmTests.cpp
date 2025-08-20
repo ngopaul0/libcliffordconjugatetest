@@ -2,7 +2,6 @@
 #include "internal/util.h"
 
 #include <cmath>
-#include <expected>
 #include <random>
 #include <vector>
 

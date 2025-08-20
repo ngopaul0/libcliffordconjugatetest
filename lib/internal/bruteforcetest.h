@@ -103,6 +103,7 @@ BruteForceReturnType<IsReturningInfo> bruteForceTestCliffordConjugacy(
     const MultiDimensionalArray<std::complex<double>, false>& Mprime_p,
     std::optional<std::reference_wrapper<const Sp1ZdGates>> gates = std::nullopt) {
 
+    // TODO: Update for multi qudit case
     const size_t d = M.rows();
     if (d != M.cols() || Mprime.rows() != Mprime.cols() || Mprime.rows() != d) {
         return notFoundValue<IsReturningInfo>();
@@ -136,7 +137,8 @@ BruteForceReturnType<IsReturningInfo> bruteForceTestCliffordConjugacy(
                             return;
                         }
 
-                        if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p,
+                        if (const Eigen::Vector<long, 2> pPrime_qPrime_vec(pPrime, qPrime);
+                            test_clifford_conjugate_lemma_10(d, pPrime_qPrime_vec, omega, M, M_p,
                                                              Mprime_p, S)) {
                             #pragma omp critical(result)
                             {

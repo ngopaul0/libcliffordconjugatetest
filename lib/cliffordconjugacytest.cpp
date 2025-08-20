@@ -2,6 +2,8 @@
 
 #include <complex>
 #include <iostream>
+
+#include "generalized/vectorisationalgorithm.h"
 #include "internal/FMap.h"
 #include "internal/bruteforcetest.h"
 #include "internal/multidimarray.h"
@@ -352,7 +354,8 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                         if (isSymplecticTransformation(d, x0, x1, x2, x3)) {
                             Sp1ZdMatrix S;
                             S << x0, x1, x2, x3;
-                            if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p,
+                            const Eigen::Vector<long, 2> pPrime_qPrime_vec(pPrime, qPrime);
+                            if (test_clifford_conjugate_lemma_10(d, pPrime_qPrime_vec, omega, M, M_p,
                                                                  Mprime_p, S)) {
                                 return true;
                             }
@@ -468,7 +471,8 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                 S << x0, x1, x2, x3;
                 // Verify this works for all p, q
                 // Check is worst-case O(d^2), but it will exit quickly if it finds a bad value
-                if (test_clifford_conjugate_lemma_10(pPrime, qPrime, omega, M, M_p, Mprime_p, S)) {
+                if (const Eigen::Vector<long, 2> pPrime_qPrime_vec(pPrime, qPrime);
+                    test_clifford_conjugate_lemma_10(d, pPrime_qPrime_vec, omega, M, M_p, Mprime_p, S)) {
                     return true;
                 }
             }
@@ -512,7 +516,6 @@ bool isCliffordConjugateGeneralized(const std::size_t d, const std::size_t n,
         histogramM.insertEntry(std::move(coord), value);
     }
 
-
     FMap histogramMprime(d, n, histogramM.size(), mapAbsValPrecision, mapXPrecision);
     MpMatrixType Mprime_p(2 * n, d);
     for (const auto& coord : Mprime_p.indexIterator()) {
@@ -538,7 +541,7 @@ bool isCliffordConjugateGeneralized(const std::size_t d, const std::size_t n,
         }
     }
 
-    return false;
+    return findSymplecticMatrix(d, n, omega, M, M_p, Mprime_p, histogramM, histogramMprime).has_value();
 }
 
 } // namespace cliffconjtest

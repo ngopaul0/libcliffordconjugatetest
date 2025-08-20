@@ -205,7 +205,7 @@ TEST_CASE("findSymplecticMatrix", "[vectorisationalgorithm][findSymplecticMatrix
         REQUIRE(bruteForceResult.has_value());
         const auto S = bruteForceResult.value().first;
 
-        auto result = findSymplecticMatrix(d, n, MMap, MprimeMap);
+        auto result = findSymplecticMatrix(d, n, omega, M, M_p, Mprime_p, MMap, MprimeMap);
         REQUIRE(result.has_value());
         CHECK(result.value() == S);
     }

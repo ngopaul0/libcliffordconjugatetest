@@ -96,7 +96,7 @@ std::complex<double> f(const Eigen::Ref<const Eigen::MatrixXcd>& M, int p, int q
 }
 
 std::complex<double> f_multiqudit(const Eigen::Ref<const Eigen::MatrixXcd>& M,
-                                  const Eigen::Vector<long, -1>& pq_vec, size_t d,
+                                  const Eigen::Vector<long, Eigen::Dynamic>& pq_vec, size_t d,
                                   int inv_2, const std::complex<double>& omega) {
     if (M.rows() != M.cols()) {
         throw std::invalid_argument("M is not squre");

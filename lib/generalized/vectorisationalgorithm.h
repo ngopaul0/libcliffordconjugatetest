@@ -4,6 +4,8 @@
 #include <Eigen/Dense>
 #include "internal/FMap.h"
 // ReSharper disable once CppUnusedIncludeDirective
+#include "internal/multidimarray.h"
+
 #include "unsupported/Eigen/KroneckerProduct"
 
 namespace cliffconjtest {
@@ -64,11 +66,17 @@ auto createSystem(const VectorType& v, const VectorType& vMap) {
 template <typename MatrixType, typename VectorType>
 void appendToSystem(MatrixType& existingRREFSystem, const VectorType& v, const VectorType& vMap) {
     using Scalar = typename VectorType::Scalar;
+    assert(existingRREFSystem.rows() != 0);
+    assert(existingRREFSystem.cols() != 0);
+
     // Evaluate this explicitly so it can be augmented.
     Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> newBottomRows = createXtransposeTensorI(v);
     augmentAWithVec(newBottomRows, vMap);
 
     existingRREFSystem.conservativeResize(existingRREFSystem.rows() + newBottomRows.rows(), Eigen::NoChange);
+    std::stringstream ss;
+    ss << existingRREFSystem;
+    auto s = ss.str();
     // Copy newBottomRows into the newly created rows at the bottom of existingRREFSystem
     existingRREFSystem.bottomRows(newBottomRows.rows()) = newBottomRows;
 }
@@ -114,16 +122,18 @@ bool isSystemInconsistent(const MatrixType& matrixRREF) {
     return false;
 }
 
-inline bool isSymplectic(const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& S, const size_t d) {
+inline bool isSymplectic(const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& S,
+                         const size_t d) {
     assert(S.rows() == S.cols());
     assert(S.rows() % 2 == 0);
     const long n = S.rows() / 2;
     if (n == 1) {
-        return safeMod(S(0,0) * S(1,1) - S(0, 1) * S(1,0), d) == 1;
+        return safeMod(S(0, 0) * S(1, 1) - S(0, 1) * S(1, 0), d) == 1;
     }
 
     // Construct the standard symplectic matrix, J
-    Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> J = Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>::Zero(2 * n, 2 * n);
+    Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> J =
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>::Zero(2 * n, 2 * n);
     J.topRightCorner(n, n).setIdentity();
     J.bottomLeftCorner(n, n).setIdentity();
     J.bottomLeftCorner(n, n) *= static_cast<long>(d - 1);
@@ -132,8 +142,12 @@ inline bool isSymplectic(const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynami
     return modMatrix(S.transpose() * J * S, d) == J;
 }
 
+size_t returnLastNumRecursiveCalls();
+
 std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>>
-findSymplecticMatrix(size_t d, size_t n, const FMap& Mmap, const FMap& Mprimemap);
+findSymplecticMatrix(size_t d, size_t n, const std::complex<double>& omega,
+                     const Eigen::Ref<const Eigen::MatrixXcd>& M, const MpMatrixType& M_p,
+                     const MpMatrixType& Mprime_p, const FMap& Mmap, const FMap& Mprimemap);
 
 } // namespace cliffconjtest
 

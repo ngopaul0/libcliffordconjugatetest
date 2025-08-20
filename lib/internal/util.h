@@ -125,14 +125,37 @@ inline size_t symplecticProduct(size_t d, int p, int q, int pPrime, int qPrime) 
     return safeMod(p * qPrime - pPrime * q, d);
 }
 
-template<typename Derived>
+inline size_t
+symplecticProductMultiQudit(size_t d, const Eigen::Vector<long, Eigen::Dynamic>& pq_vec,
+                            const Eigen::Vector<long, Eigen::Dynamic>& pPrime_qPrime_vec) {
+    assert(pq_vec.rows() == pPrime_qPrime_vec.rows());
+    const size_t twoTimes_n = pq_vec.rows();
+    assert(twoTimes_n % 2 == 0);
+    const size_t n = twoTimes_n / 2;
+
+    size_t sum = 0;
+    for (size_t i = 0; i < n; ++i) {
+        size_t pIndex = 2 * i;
+        size_t qIndex = 2 * i + 1;
+
+        long p_i = pq_vec[pIndex];
+        long qPrime_i = pPrime_qPrime_vec[qIndex];
+
+        long pPrime_i = pPrime_qPrime_vec[pIndex];
+        long q_i = pq_vec[qIndex];
+
+        sum = safeMod(sum + p_i * qPrime_i - pPrime_i * q_i, d);
+    }
+
+    return sum;
+}
+
+template <typename Derived>
 Eigen::Matrix<typename Derived::Scalar, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime>
 modMatrix(const Eigen::MatrixBase<Derived>& matrix, typename Derived::Scalar modulus) {
-    // The unaryExpr method applies a function to each element of the matrix. The lambda function's parameter is
-    // automatically deduced to be the matrix's scalar type (e.g., int, long).
-    return matrix.unaryExpr([&](const typename Derived::Scalar x) {
-        return safeMod(x, modulus);
-    });
+    // The unaryExpr method applies a function to each element of the matrix. The lambda function's
+    // parameter is automatically deduced to be the matrix's scalar type (e.g., int, long).
+    return matrix.unaryExpr([&](const typename Derived::Scalar x) { return safeMod(x, modulus); });
 }
 
 /**
@@ -213,7 +236,7 @@ std::complex<double> f(const Eigen::Ref<const Eigen::MatrixXcd>& M, int p, int q
  * @return the coefficient of W(p1,q1) ⊗ ... ⊗ W(pn,qn) in the Pauli basis decomposition of M.
  */
 std::complex<double> f_multiqudit(const Eigen::Ref<const Eigen::MatrixXcd>& M,
-                                  const Eigen::Vector<long, -1>& pq_vec, size_t d,
+                                  const Eigen::Vector<long, Eigen::Dynamic>& pq_vec, size_t d,
                                   int inv_2, const std::complex<double>& omega);
 
 /**

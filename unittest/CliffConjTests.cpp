@@ -5,6 +5,7 @@
 #include "catch2/matchers/catch_matchers.hpp"
 #include "catch2/matchers/catch_matchers_floating_point.hpp"
 #include "cliffordconjugacytest.hpp"
+#include "generalized/vectorisationalgorithm.h"
 #include "internal/bruteforcetest.h"
 #include "internal/cliffordgates.h"
 #include "internal/util.h"
@@ -121,7 +122,7 @@ TEST_CASE("single Pauli basis element", "[single]") {
 }
 
 TEST_CASE("multiple Pauli basis elements", "[multiple]") {
-    SECTION("d=3: All basis elements have coeff 1") {
+    SECTION("d=3: All basis elements have coeff 1", "[single-qubit][d=3]") {
         const int d = 3; // Example dimension
         const int inv_2 = fastPowerMod(2, d - 2, d);
         const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));
@@ -140,7 +141,7 @@ TEST_CASE("multiple Pauli basis elements", "[multiple]") {
         REQUIRE(isCliffordConjugate(M, Mprime));
     }
 
-    SECTION("d=11: Linearly dependent M_p") {
+    SECTION("d=11: Linearly dependent M_p", "[single-qubit][d=11]") {
         const int d = 11; // Example dimension
         const int inv_2 = fastPowerMod(2, d - 2, d);
         const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));
@@ -154,6 +155,26 @@ TEST_CASE("multiple Pauli basis elements", "[multiple]") {
         INFO("M = " << M);
         INFO("Mprime = " << Mprime);
         REQUIRE(isCliffordConjugate(M, Mprime));
+    }
+
+    SECTION("Generalized algorithm: d=11: Linearly dependent M_p", "[generalized][d=11]") {
+        SKIP("Takes too long (48-50s)");
+
+        const int d = 11; // Example dimension
+        const int inv_2 = fastPowerMod(2, d - 2, d);
+        const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));
+        const Eigen::MatrixXcd Mprime = W(d, 1, 2, inv_2, omega) + W(d, 2, 4, inv_2, omega) +
+                                        W(d, 3, 6, inv_2, omega) + W(d, 4, 8, inv_2, omega) +
+                                        W(d, 7, 14, inv_2, omega);
+
+        const Eigen::MatrixXcd C = W(d, 3, 4, inv_2, omega) * cliffordPermutationGate(d, 7);
+        const Eigen::MatrixXcd Cstar = C.adjoint();
+        const Eigen::MatrixXcd M = C * Mprime * Cstar;
+        INFO("M = " << M);
+        INFO("Mprime = " << Mprime);
+        const auto isCliffordConjugate_M_Mprime = isCliffordConjugateGeneralized(d, 1, M, Mprime);
+        INFO("s_numRecursiveCalls = " << returnLastNumRecursiveCalls());
+        REQUIRE(isCliffordConjugate_M_Mprime);
     }
 
     SECTION("d = 3: Two Pauli basis elements") {
@@ -300,6 +321,45 @@ TEST_CASE("multiple Pauli basis elements", "[multiple]") {
         REQUIRE(!isCliffordConjugate(M, Mprime));
     }
 
+    SECTION("Generalized algorithm: d = 5: Non-example, two Pauli basis elements bypassing histogram check") {
+        // This will actually pass the histogram check.
+
+        const int d = 5; // Example dimension
+        const int inv_2 = fastPowerMod(2, d - 2, d);
+        const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));
+        Eigen::Vector2i v1(1, 2), v2(2, 2);
+
+        const Eigen::MatrixXcd Mprime =
+            2 * W(d, v1(0), v1(1), inv_2, omega) + 3 * W(d, v2(0), v2(1), inv_2, omega);
+
+        const Eigen::MatrixXcd C = cliffordPermutationGate(d, 2) * makeX(d, 2);
+        const Eigen::MatrixXcd Cstar = C.adjoint();
+
+        Eigen::Matrix2i nonSymplecticTransform;
+        nonSymplecticTransform << 2, 0, 0, 2;
+        // This asserts it's not symplectic
+        REQUIRE(safeMod(nonSymplecticTransform.determinant(), d) != 1);
+
+        // Permute the basis element coordinates by a nonsymplectic transformation. Keep the
+        // coefficients the same to bypass the histogram check.
+        Eigen::Vector2i w1 = nonSymplecticTransform * v1;
+        Eigen::Vector2i w2 = nonSymplecticTransform * v2;
+
+        const Eigen::MatrixXcd M =
+            2 * W(d, w1(0), w1(1), inv_2, omega) + 3 * W(d, w2(0), w2(1), inv_2, omega);
+
+        // Ensure the trace check is bypassed.
+        REQUIRE_THAT(Mprime.trace().imag(), Catch::Matchers::WithinAbs(M.trace().imag(), 1e-5));
+        REQUIRE_THAT(Mprime.trace().real(), Catch::Matchers::WithinAbs(M.trace().real(), 1e-5));
+
+        const auto M_p = createMpMatrix((M), omega, inv_2);
+        const auto Mprime_p = createMpMatrix((Mprime), omega, inv_2);
+        CHECK(!bruteForceTestCliffordConjugacy(M, Mprime, omega, M_p, Mprime_p));
+
+        INFO("Matrix is " << (M));
+        REQUIRE(!isCliffordConjugateGeneralized(d, 1, M, Mprime));
+    }
+
     SECTION("d = 3, Linearly dependent M_p") {
         const int d = 3; // Example dimension
         const int inv_2 = fastPowerMod(2, d - 2, d);
@@ -312,6 +372,20 @@ TEST_CASE("multiple Pauli basis elements", "[multiple]") {
 
         INFO("Matrix is " << (M));
         REQUIRE(isCliffordConjugate(M, Mprime));
+    }
+
+    SECTION("Generalized algorithm: d = 3, Linearly dependent M_p") {
+        const int d = 3; // Example dimension
+        const int inv_2 = fastPowerMod(2, d - 2, d);
+        const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));
+        const Eigen::MatrixXcd Mprime = W(d, 1, 2, inv_2, omega) + W(d, 2, 1, inv_2, omega);
+
+        const Eigen::MatrixXcd C = cliffordPermutationGate(d, 2) * makeX(d, 2);
+        const Eigen::MatrixXcd Cstar = C.adjoint();
+        const Eigen::MatrixXcd M = C * Mprime * Cstar;
+
+        INFO("Matrix is " << (M));
+        REQUIRE(isCliffordConjugateGeneralized(d, 1, M, Mprime));
     }
 
     SECTION("d=5: Algorithm works on linearly dependent M_p") {

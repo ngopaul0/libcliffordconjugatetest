@@ -53,11 +53,12 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
         if (selectedVecMIndices.contains(i)) {
             continue;
         }
-
+        const auto& v = vecsM[i];
         // Test the validity of a symplectic matrix mapping v to vMap
         for (size_t j = 0; j < vecsMprime.size(); ++j) {
-            const auto& v = vecsM[i];
 
+            const auto& vMap = vecsMprime[j];
+#ifndef NDEBUG
             size_t foundCount = 0;
             for (const auto& mapping : mappings) {
                 std::vector<long> e1 = {1, 2, 2, 1};
@@ -109,8 +110,6 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
             ssV << v;
             auto stringV = ssV.str();
 
-            const auto& vMap = vecsMprime[j];
-
             if (foundCount > 0 && mappings.size() == foundCount) {
                 std::stringstream ss;
                 for (const auto& vv : vecsMprime) {
@@ -132,7 +131,7 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
             std::stringstream ssVmap;
             ssVmap << vMap;
             auto stringVmap = ssVmap.str();
-
+#endif
             CliffPermutationSysMatrix systemSForPair;
             PPrimeQPrimeSysMatrix systemPPrimeQPrimeForPair;
             if (!systemForS || !systemForPPrimeQPrime) {
@@ -170,6 +169,7 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
                 CliffPermutationSysMatrix rrefSystem = systemSForPair;
                 const size_t rank = reduceToREFAndGetRank(rrefSystem, d, true);
 
+#ifndef NDEBUG
                 std::stringstream ssSystemS;
                 ssSystemS << systemSForPair;
                 auto stringSSystem = ssSystemS.str();
@@ -177,7 +177,7 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
                 std::stringstream ssRREFSystemS;
                 ssRREFSystemS << rrefSystem;
                 auto stringRREFSSystem = ssRREFSystemS.str();
-
+#endif
 
                 // Since S is vectorised, the rank should be the number of entries in S, i.e.
                 // it's an (2n) x (2n) symplectic matrix
@@ -188,11 +188,11 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
                     Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> S =
                         recoverSFromSystem(rrefSystem, n);
 
-
-
+#ifndef NDEBUG
                     std::stringstream sss;
                     sss << S;
                     auto sString = sss.str();
+#endif
 
                     if (isSystemInconsistent(systemPPrimeQPrimeForPair)) {
                         continue;
@@ -223,7 +223,7 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
 
             std::unordered_set<size_t> thisSelected = selectedVecMIndices;
             thisSelected.insert(i);
-
+#ifndef NDEBUG
             std::vector<long> vVec;
             for (size_t ind = 0; ind < v.size(); ind++) {
                 vVec.push_back(v(ind));
@@ -232,10 +232,11 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
             for (size_t ind = 0; ind < vMap.size(); ind++) {
                 vMapVec.push_back(vMap(ind));
             }
-
+#endif
             std::vector newMappings(mappings);
+#ifndef NDEBUG
             newMappings.push_back({std::move(vVec), std::move(vMapVec)});
-
+#endif
             const auto recursiveResult = findSymplecticMatrixRecurse(
                 d, n, omega, M, M_p, Mprime_p, Mmap, Mprimemap, sortedKeys, maxKeyIndex,
                 lastKeyIndex, std::make_optional(systemSForPair),

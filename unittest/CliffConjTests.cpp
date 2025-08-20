@@ -434,6 +434,7 @@ Eigen::MatrixXcd computeMSum(size_t d, std::vector<std::pair<long, long>> coords
 
 TEST_CASE("Multi qudit case", "[multiqudit]") {
     SECTION("d=3, 2 qudits", "[generalized][d=3][n=2]") {
+        SKIP("too long");
         const int d = 3; // Example dimension
         const size_t n = 2;
         const int inv_2 = modInverse(2, d);

@@ -231,7 +231,7 @@ inline bool isSymplectic(const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynami
     J.topRightCorner(n, n).setIdentity();
     J.bottomLeftCorner(n, n).setIdentity();
     J.bottomLeftCorner(n, n) *= static_cast<long>(d - 1);
-
+#ifndef NDEBUG
     std::stringstream ss;
     ss << J;
     auto s = ss.str();
@@ -239,12 +239,14 @@ inline bool isSymplectic(const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynami
     std::stringstream sss;
     sss << S;
     auto sString = sss.str();
-
+#endif
     // Definition of symplectic S^T * J * S = J
     auto lhs = modMatrix(S.transpose() * J * S, d);
+#ifndef NDEBUG
     std::stringstream sssLhs;
     sssLhs << lhs;
     auto lhsString = sssLhs.str();
+#endif
     return lhs == J;
 }
 

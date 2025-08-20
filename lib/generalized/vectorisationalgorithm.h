@@ -1,12 +1,10 @@
 #ifndef VECTORISATIONALGORITHM_H
 #define VECTORISATIONALGORITHM_H
 
+#include "unsupported/Eigen/KroneckerProduct"
 #include <Eigen/Dense>
 #include "internal/FMap.h"
-// ReSharper disable once CppUnusedIncludeDirective
 #include "internal/multidimarray.h"
-
-#include "unsupported/Eigen/KroneckerProduct"
 
 namespace cliffconjtest {
 
@@ -25,7 +23,7 @@ auto createXtransposeTensorI(const Eigen::MatrixBase<Derived>& X) {
     const auto identity =
         Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>::Identity(X.rows(), X.rows());
 
-    return kroneckerProduct(X.transpose(), identity);
+    return Eigen::kroneckerProduct(X.transpose(), identity);
 }
 
 /**
@@ -39,10 +37,11 @@ auto createXtransposeTensorI(const Eigen::MatrixBase<Derived>& X) {
 template <typename MatrixType>
 Eigen::Map<Eigen::Vector<typename MatrixType::Scalar, Eigen::Dynamic>> vecOperator(MatrixType& X) {
     static_assert(!MatrixType::IsRowMajor,
-        "The matrix must be in column-major order for efficient vec operator.");
+                  "The matrix must be in column-major order for efficient vec operator.");
     // Since Eigen matrices here are stored in column-major order, it's trivial to make the
     // vec operator. Eigen::Map allows us to create a vector without any data being copied.
-    return Eigen::Map<Eigen::Vector<typename MatrixType::Scalar, Eigen::Dynamic>>(X.data(), X.size());
+    return Eigen::Map<Eigen::Vector<typename MatrixType::Scalar, Eigen::Dynamic>>(X.data(),
+                                                                                  X.size());
 }
 
 /**
@@ -56,29 +55,105 @@ void augmentAWithVec(MatrixType& A, const VectorType& v) {
 }
 
 template <typename VectorType>
-auto createSystem(const VectorType& v, const VectorType& vMap) {
+auto createSystemForS(const VectorType& v, const VectorType& vMap) {
     using Scalar = typename VectorType::Scalar;
-    Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> newBottomRows = createXtransposeTensorI(v);
+    Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> newBottomRows =
+        createXtransposeTensorI(v);
     augmentAWithVec(newBottomRows, vMap);
     return newBottomRows;
 }
 
 template <typename MatrixType, typename VectorType>
-void appendToSystem(MatrixType& existingRREFSystem, const VectorType& v, const VectorType& vMap) {
+void appendToSystemForS(MatrixType& existingRREFSystem, const VectorType& v,
+                        const VectorType& vMap) {
     using Scalar = typename VectorType::Scalar;
     assert(existingRREFSystem.rows() != 0);
     assert(existingRREFSystem.cols() != 0);
 
     // Evaluate this explicitly so it can be augmented.
-    Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> newBottomRows = createXtransposeTensorI(v);
+    Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> newBottomRows =
+        createXtransposeTensorI(v);
     augmentAWithVec(newBottomRows, vMap);
 
-    existingRREFSystem.conservativeResize(existingRREFSystem.rows() + newBottomRows.rows(), Eigen::NoChange);
-    std::stringstream ss;
-    ss << existingRREFSystem;
-    auto s = ss.str();
+    existingRREFSystem.conservativeResize(existingRREFSystem.rows() + newBottomRows.rows(),
+                                          Eigen::NoChange);
     // Copy newBottomRows into the newly created rows at the bottom of existingRREFSystem
     existingRREFSystem.bottomRows(newBottomRows.rows()) = newBottomRows;
+}
+
+/**
+ * From known pq_vecs = (p1, q1, p2, q2, ..., pn, qn)
+ * and unknown pPrime_qPrime_vec = (p_1', q_1', ..., p_n', q_n'),
+ * computes a system of equations of the form
+ *
+ *     symplecticProduct(pq_vec, pPrime_qPrime_vec) = k.
+ *
+ * We have assumption that
+ * \code
+ *     f_M(pq_vec) = omega^symplecticProduct(pq_vec, pPrime_qPrime_vec) * f_{M'}(S(pq_vec)).
+ * \endcode
+ *
+ * We can compute f_M(pq_vec), f_{M'}(S(pq_vec)), and also the value of
+ * symplecticProduct(pq_vec, pPrime_qPrime_vec), which we'll call k.
+ *
+ * The symplectic product is defined as sum(i = 1..n, p_i * q_i' - q_i * p_i'). So row-wise (i.e.,
+ * one equation), one row of the system would be
+ * \code
+ *                                                |p_1'|
+ *                                                |q_1'|
+ *      [-q_1  p_1  -q_2  p_2  ...  -q_n  p_n] *  |... | = k
+ *                                                |p_n'|
+ *                                                |q_n'|
+ * \endcode
+ * @tparam VectorType
+ * @param d Odd prime
+ * @param pq_vec
+ * @param k The apparent exponent for alpha = omega^k * beta
+ * @return
+ */
+template <typename VectorType>
+auto createSystemForPPrimeQPrime(const size_t d, const VectorType& pq_vec, const size_t k) {
+    using Scalar = typename VectorType::Scalar;
+    const size_t twoTimes_n = pq_vec.rows();
+    Eigen::RowVector<Scalar, Eigen::Dynamic> row(pq_vec.rows() + 1);
+    for (size_t i = 0; i < twoTimes_n / 2; i++) {
+        size_t pIndex = 2 * i;
+        size_t qIndex = 2 * i + 1;
+        long p_i = pq_vec[pIndex];
+        long q_i = pq_vec[qIndex];
+
+        // -q_i first
+        row(pIndex) = q_i == 0 ? 0 : d - q_i;
+        // p_i second
+        row(qIndex) = p_i;
+        assert(row(pIndex) == safeMod(-q_i, d));
+    }
+    row(row.cols() - 1) = k;
+    return row;
+}
+
+template <typename VectorType>
+void appendToSystemForPPrimeQPrime(
+    Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& existingRREFSystem, const size_t d,
+    const VectorType& pq_vec, const size_t k) {
+    using Scalar = typename VectorType::Scalar;
+    assert(existingRREFSystem.rows() != 0);
+    assert(existingRREFSystem.cols() != 0);
+
+    // Evaluate this explicitly so it can be augmented.
+    Eigen::RowVector<Scalar, Eigen::Dynamic> newBottomRow =
+        createSystemForPPrimeQPrime(d, pq_vec, k);
+
+    existingRREFSystem.conservativeResize(existingRREFSystem.rows() + 1, Eigen::NoChange);
+    // Copy newBottomRow into the newly created rows at the bottom of existingRREFSystem
+    existingRREFSystem.row(existingRREFSystem.rows() - 1) = newBottomRow;
+}
+
+template <typename MatrixType>
+Eigen::Vector<long, Eigen::Dynamic> recoverPPrimeQPrimeVecFromSystem(MatrixType& system,
+                                                                     size_t numQubits) {
+    Eigen::Vector<long, Eigen::Dynamic> vecS = system.col(system.cols() - 1).head(2 * numQubits);
+    return vecS;
 }
 
 template <typename MatrixType>
@@ -96,10 +171,12 @@ void trimZeroRowsFromBottom(MatrixType& M) {
 }
 
 template <typename MatrixType>
-Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> recoverSFromSystem(MatrixType& system, size_t numQubits) {
+Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> recoverSFromSystem(MatrixType& system,
+                                                                       size_t numQubits) {
     static_assert(!MatrixType::IsRowMajor,
-        "The matrix must be in column-major order for efficient recovery");
-    Eigen::Vector<long, Eigen::Dynamic> vecS = system.col(system.cols() - 1).head((2 * numQubits) * (2 * numQubits));
+                  "The matrix must be in column-major order for efficient recovery");
+    Eigen::Vector<long, Eigen::Dynamic> vecS =
+        system.col(system.cols() - 1).head((2 * numQubits) * (2 * numQubits));
     return vecS.reshaped((2 * numQubits), (2 * numQubits));
 }
 
@@ -122,6 +199,23 @@ bool isSystemInconsistent(const MatrixType& matrixRREF) {
     return false;
 }
 
+/**
+ * @return The direct sum of A and B: [A, 0; 0, B]
+ */
+template <typename DerivedA, typename DerivedB>
+auto directSum(const Eigen::MatrixBase<DerivedA>& A, const Eigen::MatrixBase<DerivedB>& B) {
+    long n_rows = A.rows();
+    long n_cols = A.cols();
+    long m_rows = B.rows();
+    long m_cols = B.cols();
+
+    Eigen::Matrix<typename DerivedA::Scalar, Eigen::Dynamic, Eigen::Dynamic> C(n_rows + m_rows, n_cols + m_cols);
+    C.setZero();
+    C.topLeftCorner(n_rows, n_cols) = A;
+    C.bottomRightCorner(m_rows, m_cols) = B;
+    return C;
+}
+
 inline bool isSymplectic(const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& S,
                          const size_t d) {
     assert(S.rows() == S.cols());
@@ -137,6 +231,14 @@ inline bool isSymplectic(const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynami
     J.topRightCorner(n, n).setIdentity();
     J.bottomLeftCorner(n, n).setIdentity();
     J.bottomLeftCorner(n, n) *= static_cast<long>(d - 1);
+
+    std::stringstream ss;
+    ss << J;
+    auto s = ss.str();
+
+    std::stringstream sss;
+    sss << S;
+    auto sString = sss.str();
 
     // Definition of symplectic S^T * J * S = J
     return modMatrix(S.transpose() * J * S, d) == J;

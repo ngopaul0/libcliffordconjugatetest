@@ -51,6 +51,9 @@ inline bool test_clifford_conjugate_lemma_10(
             std::pow(omega, symplecticProductMultiQudit(d, v, pPrime_qPrime_vec));
 
         if (!isApproxEqual(fM, omegaTerm * fMPrime)) {
+            std::stringstream ss;
+            ss << v;
+            auto s = ss.str();
             return false;
         }
     }

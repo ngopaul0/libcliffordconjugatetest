@@ -506,42 +506,39 @@ bool isCliffordConjugateGeneralized(const std::size_t d, const std::size_t n,
     const auto inv2 = modInverse(2, d);
     const auto omega = std::exp(std::complex<double>(0, 2 * pi / d));
 
-    FMap histogramM(d, n, mapAbsValPrecision, mapXPrecision);
+    FMap MMap(d, n, 1e-5, 1e-5);
     MpMatrixType M_p(2 * n, d);
-
-    for (const auto& coord : M_p.indexIterator()) {
-        assert(coord.size() == 2 * n);
-        const auto value = f_multiqudit(M, coord, d, inv2, omega);
-        M_p.get(coord) = value;
-        histogramM.insertEntry(std::move(coord), value);
+    for (auto tuple : M_p.indexIterator()) {
+        const auto val = f_multiqudit(M, tuple, d, inv2, omega);
+        M_p.get(tuple) = val;
+        MMap.insertEntryNTuple(std::move(tuple), val);
     }
 
-    FMap histogramMprime(d, n, histogramM.size(), mapAbsValPrecision, mapXPrecision);
+    FMap MprimeMap(d, n, 1e-5, 1e-5);
     MpMatrixType Mprime_p(2 * n, d);
-    for (const auto& coord : Mprime_p.indexIterator()) {
-        assert(coord.size() == 2 * n);
-        const auto key = f_multiqudit(M_prime, coord, d, inv2, omega);
-        Mprime_p.get(coord) = key;
-        const auto mapKey = histogramMprime.insertEntry(std::move(coord), key);
+    for (auto tuple : Mprime_p.indexIterator()) {
+        const auto val = f_multiqudit(M_prime, tuple, d, inv2, omega);
+        Mprime_p.get(tuple) = val;
+        const auto mapKey = MprimeMap.insertEntryNTuple(std::move(tuple), val);
         // Early histogram check
-        if (histogramMprime.getCount(mapKey) > histogramM.getCount(mapKey)) {
+        if (MprimeMap.getCount(mapKey) > MMap.getCount(mapKey)) {
             return false;
         }
     }
 
 
-    if (histogramM.size() != histogramMprime.size()) {
+    if (MMap.size() != MprimeMap.size()) {
         return false;
     }
     // Worst case: Every entry in M_p and M_prime is unique, and this results in O(d^2) absolute
     // values to check.
-    for (const auto& key : histogramMprime.getMap() | std::views::keys) {
-        if (histogramMprime.getCount(key) != histogramM.getCount(key)) {
+    for (const auto& key : MprimeMap.getMap() | std::views::keys) {
+        if (MprimeMap.getCount(key) != MMap.getCount(key)) {
             return false;
         }
     }
 
-    return findSymplecticMatrix(d, n, omega, M, M_p, Mprime_p, histogramM, histogramMprime).has_value();
+    return findSymplecticMatrix(d, n, omega, M, M_p, Mprime_p, MMap, MprimeMap).has_value();
 }
 
 } // namespace cliffconjtest

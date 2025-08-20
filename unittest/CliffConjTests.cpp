@@ -158,7 +158,7 @@ TEST_CASE("multiple Pauli basis elements", "[multiple]") {
     }
 
     SECTION("Generalized algorithm: d=11: Linearly dependent M_p", "[generalized][d=11]") {
-        SKIP("Takes too long (48-50s)");
+        // SKIP("Takes too long (48-50s)");
 
         const int d = 11; // Example dimension
         const int inv_2 = fastPowerMod(2, d - 2, d);
@@ -421,5 +421,71 @@ TEST_CASE("multiple Pauli basis elements", "[multiple]") {
         INFO("Matrix is " << (M));
         auto result = bruteForceTestCliffordConjugacy<true>(M, Mprime, omega, M_p, Mprime_p);
         REQUIRE(result.has_value());
+    }
+}
+
+TEST_CASE("Multi qudit case", "[multiqudit]") {
+    SECTION("d=3, 2 qudits", "[generalized][d=3][n=2]") {
+        const int d = 3; // Example dimension
+        const size_t n = 2;
+        const int inv_2 = modInverse(2, d);
+        const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));
+        constexpr std::complex<double> complexFor2ndTuple = {-1, 3};
+        const Eigen::MatrixXcd M1 = W(d, 1, 2, inv_2, omega) + complexFor2ndTuple * W(d, 0, 1, inv_2, omega) + W(d, 0,0, inv_2, omega);
+        const Eigen::MatrixXcd M2 = 3 * W(d, 2, 2, inv_2, omega) + W(d, 2, 0, inv_2, omega) + W(d, 0,1, inv_2, omega);
+        const Eigen::MatrixXcd M = Eigen::kroneckerProduct(M1, M2);
+
+        const Eigen::MatrixXcd C1 = cliffordPermutationGate(d, 2);
+        const Eigen::MatrixXcd C2 = W(d, 2,2, inv_2, omega) * makeZX(d, 2, 1);
+        const Eigen::MatrixXcd C = Eigen::kroneckerProduct(C1, C2);
+        const Eigen::MatrixXcd Mprime = C * M * C.adjoint();
+
+        const Eigen::MatrixXcd M1prime = C1 * M1 * C1.adjoint();
+        const Eigen::MatrixXcd M2prime = C2 * M2 * C2.adjoint();
+
+        const auto M1_p = createMpMatrix((M1), omega, inv_2);
+        const auto M1prime_p = createMpMatrix((M1prime), omega, inv_2);
+        std::optional<Lemma10Info> result1 = bruteForceTestCliffordConjugacy<true>(M1, M1prime, omega, M1_p, M1prime_p);
+        std::stringstream ssC1;
+        ssC1 << result1->first;
+        auto stringC1 = ssC1.str();
+        const auto M2_p = createMpMatrix((M2), omega, inv_2);
+        const auto M2prime_p = createMpMatrix((M2prime), omega, inv_2);
+        std::optional<Lemma10Info> result2 = bruteForceTestCliffordConjugacy<true>(M2, M2prime, omega, M2_p, M2prime_p);
+        std::stringstream ssC2;
+        ssC2 << result2->first;
+        auto stringC2 = ssC2.str();
+        const size_t pPrime1 = result1->second.first;
+        const size_t qPrime1 = result1->second.second;
+        const size_t pPrime2 = result2->second.first;
+        const size_t qPrime2 = result2->second.second;
+
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> S = directSum(result1->first, result2->first);
+        std::stringstream ssC;
+        ssC << S;
+        auto stringC = ssC.str();
+
+        FMap MMap(d, n, 1e-5, 1e-5);
+        MpMatrixType M_p(2 * n, d);
+        for (auto tuple : M_p.indexIterator()) {
+            const auto val = f_multiqudit(M, tuple, d, inv_2, omega);
+            M_p.get(tuple) = val;
+            MMap.insertEntryNTuple(std::move(tuple), val);
+        }
+
+        FMap MprimeMap(d, n, 1e-5, 1e-5);
+        MpMatrixType Mprime_p(2 * n, d);
+        for (auto tuple : Mprime_p.indexIterator()) {
+            const auto val = f_multiqudit(Mprime, tuple, d, inv_2, omega);
+            Mprime_p.get(tuple) = val;
+            MprimeMap.insertEntryNTuple(std::move(tuple), val);
+        }
+
+
+        Eigen::Vector<long, 4> pPrimeQPrimeVec(pPrime1, qPrime1, pPrime2, qPrime2);
+        const auto res = test_clifford_conjugate_lemma_10(d, pPrimeQPrimeVec, omega, M, M_p, Mprime_p, S);
+        REQUIRE(res);
+
+        REQUIRE(isCliffordConjugateGeneralized(d, n, M, Mprime));
     }
 }

@@ -100,7 +100,7 @@ TEST_CASE("vectorisation", "[vectorisationalgorithm]") {
         Eigen::Vector<long, 2> v1(1, 2);
         Eigen::Vector<long, 2> mappedSv1 = modMatrix(S * v1, d);
 
-        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> system = createSystem(v1, mappedSv1);
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> system = createSystemForS(v1, mappedSv1);
         Eigen::Matrix<long, 2, 4 + 1> expectedState;
         expectedState << 1, 0, 2, 0, 1,
                          0, 1, 0, 2, 4;
@@ -117,7 +117,7 @@ TEST_CASE("vectorisation", "[vectorisationalgorithm]") {
         Eigen::Vector<long, 2> mappedSv2 = modMatrix(S * v2, d);
         size_t rowsBefore = system.rows();
         CHECK(rowsBefore == 2);
-        appendToSystem(system, v2, mappedSv2);
+        appendToSystemForS(system, v2, mappedSv2);
         size_t rowsAfter = system.rows();
         CHECK(rowsAfter == 4);
         Eigen::Matrix<long, 4, 4 + 1> expectedState2;
@@ -143,7 +143,7 @@ TEST_CASE("vectorisation", "[vectorisationalgorithm]") {
         Eigen::Vector<long, 2> mappedSv3 = modMatrix(S * v3, d);
         rowsBefore = system.rows();
         CHECK(rowsBefore == 4);
-        appendToSystem(system, v3, mappedSv3);
+        appendToSystemForS(system, v3, mappedSv3);
         rowsAfter = system.rows();
         CHECK(rowsAfter == 6);
         Eigen::Matrix<long, 6, 4 + 1> expectedState3;
@@ -181,11 +181,15 @@ TEST_CASE("findSymplecticMatrix", "[vectorisationalgorithm][findSymplecticMatrix
         const int n = 1;
         const int inv_2 = modInverse(2, d);
         const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));
-        const Eigen::MatrixXcd Mprime = W(d, 1, 2, inv_2, omega) + W(d, 1, 1, inv_2, omega);
+
+        const Eigen::Vector<long, 2> v1 = {1, 2};
+        const Eigen::Vector<long, 2> v2 = {1, 1};
+
+        const Eigen::MatrixXcd M = W(d, v1(0), v1(1), inv_2, omega) + W(d, v2(0), v2(1), inv_2, omega);
 
         const Eigen::MatrixXcd C = cliffordPermutationGate(d, 2);
         const Eigen::MatrixXcd Cstar = C.adjoint();
-        const Eigen::MatrixXcd M = C * Mprime * Cstar;
+        const Eigen::MatrixXcd Mprime = C * M * Cstar;
 
         FMap MMap(d, n, 1e-5, 1e-5);
         for (const auto& tuple : TupleIterator<SingleModulus>(d, 2)) {
@@ -205,8 +209,61 @@ TEST_CASE("findSymplecticMatrix", "[vectorisationalgorithm][findSymplecticMatrix
         REQUIRE(bruteForceResult.has_value());
         const auto S = bruteForceResult.value().first;
 
+        const Eigen::Vector<long, 2> Sv1 = modMatrix(S * v1, d);
+        std::stringstream ssv1;
+        ssv1 << Sv1;
+        auto strv1 = ssv1.str();
+        const Eigen::Vector<long, 2> Sv2 = modMatrix(S * v2, d);
+        std::stringstream ssv2;
+        ssv2 << Sv2;
+        auto strv2 = ssv2.str();
+
         auto result = findSymplecticMatrix(d, n, omega, M, M_p, Mprime_p, MMap, MprimeMap);
         REQUIRE(result.has_value());
         CHECK(result.value() == S);
+    }
+}
+
+TEST_CASE("createSystemForPPrimeQPrime", "[generalized]") {
+
+
+    SECTION("Creates system correctly") {
+        const size_t d = 5;
+        for (const auto& pq_vec : TupleIterator<SingleModulus>(d, 4)) {
+            INFO("pq_vec = " << pq_vec);
+            const size_t k = 3;
+
+            REQUIRE(pq_vec.rows() == 4);
+            REQUIRE(pq_vec.size() == 4);
+
+            Eigen::RowVector<long, 5> system = createSystemForPPrimeQPrime(d, pq_vec, k);
+            Eigen::RowVector<long, 5> expectedSystem =
+                {safeMod(-pq_vec(1), d), pq_vec(0), safeMod(-pq_vec(3), d), pq_vec(2), k};
+            REQUIRE(expectedSystem == system);
+        }
+    }
+
+    SECTION("Appends to system correctly") {
+        const size_t d = 5;
+        const size_t k = 3;
+        const Eigen::Vector<long, 4> pq_vec = {1, 2, 3, 4};
+        REQUIRE(pq_vec.rows() == 4);
+        REQUIRE(pq_vec.size() == 4);
+
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> system =
+            createSystemForPPrimeQPrime(d, pq_vec, k);
+        Eigen::RowVector<long, 5> expectedSystem = {safeMod(-pq_vec(1), d), pq_vec(0), safeMod(-pq_vec(3), d), pq_vec(2), k};
+        REQUIRE(expectedSystem == system);
+        REQUIRE(expectedSystem == system.row(0));
+
+        const Eigen::Vector<long, 4> pq_vec_2 = {1, 2, 3, 4};
+        CHECK(system.rows() == 1);
+        const size_t k2 = 2;
+        appendToSystemForPPrimeQPrime(system, d, pq_vec, k2);
+        CHECK(system.rows() == 2);
+        Eigen::RowVector<long, 5> expectedSystem2ndRow =
+           {safeMod(-pq_vec_2(1), d), pq_vec_2(0), safeMod(-pq_vec_2(3), d), pq_vec_2(2), k2};;
+        CHECK(expectedSystem == system.row(0));
+        CHECK(expectedSystem2ndRow == system.row(1));
     }
 }

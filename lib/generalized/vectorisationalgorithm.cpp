@@ -24,7 +24,7 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
     const std::vector<FMapKey>& sortedKeys, size_t& maxKeyIndex, const size_t lastKeyIndex = 0,
     std::optional<CliffPermutationSysMatrix>&& systemForS = std::nullopt,
     std::optional<PPrimeQPrimeSysMatrix>&& systemForPPrimeQPrime = std::nullopt,
-    std::unordered_set<size_t>&& selectedVecMIndices = {}) {
+    std::unordered_set<size_t>&& selectedVecMIndices = {}, std::vector<std::pair<std::vector<long>, std::vector<long>>>&& mappings = {}) {
 
     s_numRecursiveCalls++;
 
@@ -57,10 +57,85 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
         // Test the validity of a symplectic matrix mapping v to vMap
         for (size_t j = 0; j < vecsMprime.size(); ++j) {
             const auto& v = vecsM[i];
+
+            size_t foundCount = 0;
+            for (const auto& mapping : mappings) {
+                std::vector<long> e1 = {1, 2, 2, 1};
+                std::vector<long> e2 = {2, 1, 2, 1};
+                if (mapping.first == e1 && mapping.second == e2) {
+                    foundCount++;
+                    continue;
+                }
+                e1 = {1, 2, 2, 0};
+                e2 = {2, 1, 2, 0};
+                if (mapping.first == e1 && mapping.second == e2) {
+                    foundCount++;
+                    continue;
+                }
+                e1 = {0, 1, 2, 1};
+                e2 = {0, 2, 2, 1};
+                if (mapping.first == e1 && mapping.second == e2) {
+                    foundCount++;
+                    continue;
+                }
+                e1 = {0, 1, 2, 0};
+                e2 = {0, 2, 2, 0};
+                if (mapping.first == e1 && mapping.second == e2) {
+                    foundCount++;
+                    continue;
+                }
+                e1 = {2, 2, 2, 1};
+                e2 = {1, 1, 2, 1};
+                if (mapping.first == e1 && mapping.second == e2) {
+                    foundCount++;
+                    continue;
+                }
+                e1 = {2, 2, 2, 0};
+                e2 = {1, 1, 2, 0};
+                if (mapping.first == e1 && mapping.second == e2) {
+                    foundCount++;
+                    continue;
+                }
+            }
+            if (foundCount >= 2) {
+                std::stringstream ss;
+
+                // CliffPermutationSysMatrix system = createSystemForS(v, vMap);
+            }
+
+
+
+            std::stringstream ssV;
+            ssV << v;
+            auto stringV = ssV.str();
+
             const auto& vMap = vecsMprime[j];
+
+            if (foundCount > 0 && mappings.size() == foundCount) {
+                std::stringstream ss;
+                for (const auto& vv : vecsMprime) {
+                    ss << vv << ", " << std::endl;
+                }
+                // debugger with i = 4, j = 0 on d=3, 2 qudits test
+                // goes to i = 4, j = 1 (target is j=2)
+                auto alLVecs = ss.str();
+                if (vMap(0) == 2 && vMap(1) == 1 && vMap(2) == 2 && vMap(3) == 1) {
+                    std::stringstream ss2;
+                }
+            }
+
+            if (v(0) == 2 && v(1) == 2 && v(2) == 2 && v(3) == 0 &&
+                vMap(0) == 1 && vMap(1) == 1 && vMap(2) == 2 && vMap(3) == 0) {
+                std::stringstream ss;
+            }
+
+            std::stringstream ssVmap;
+            ssVmap << vMap;
+            auto stringVmap = ssVmap.str();
+
             CliffPermutationSysMatrix systemSForPair;
             PPrimeQPrimeSysMatrix systemPPrimeQPrimeForPair;
-            if (!thisSystemForS || !thisSystemForPPrimeQPrime) {
+            if (!systemForS || !systemForPPrimeQPrime) {
                 systemSForPair = createSystemForS(v, vMap);
                 const auto alpha = M_p.get(v);
                 const auto beta = Mprime_p.get(vMap);
@@ -79,8 +154,9 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
                     continue;
                 }
 
-                systemPPrimeQPrimeForPair = thisSystemForPPrimeQPrime.value();
-                systemSForPair = thisSystemForS.value();
+                systemPPrimeQPrimeForPair = systemForPPrimeQPrime.value();
+                systemSForPair = systemForS.value();
+                const size_t rows = systemSForPair.rows();
 
                 appendToSystemForPPrimeQPrime(systemPPrimeQPrimeForPair, d, v, k);
 
@@ -88,13 +164,20 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
                 const size_t rankPQSystem =
                     reduceToREFAndGetRank(systemPPrimeQPrimeForPair, d, true);
 
-                if (isSystemInconsistent(systemPPrimeQPrimeForPair)) {
-                    continue;
-                }
-
                 // TODO: Optimize this to only reduce the bottom row
                 appendToSystemForS(systemSForPair, v, vMap);
-                const size_t rank = reduceToREFAndGetRank(systemSForPair, d, true);
+
+                CliffPermutationSysMatrix rrefSystem = systemSForPair;
+                const size_t rank = reduceToREFAndGetRank(rrefSystem, d, true);
+
+                std::stringstream ssSystemS;
+                ssSystemS << systemSForPair;
+                auto stringSSystem = ssSystemS.str();
+
+                std::stringstream ssRREFSystemS;
+                ssRREFSystemS << rrefSystem;
+                auto stringRREFSSystem = ssRREFSystemS.str();
+
 
                 // Since S is vectorised, the rank should be the number of entries in S, i.e.
                 // it's an (2n) x (2n) symplectic matrix
@@ -103,7 +186,18 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
                     // This is a reference, so it's maintained across all recursive calls.
                     maxKeyIndex = lastKeyIndex;
                     Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> S =
-                        recoverSFromSystem(systemSForPair, n);
+                        recoverSFromSystem(rrefSystem, n);
+
+
+
+                    std::stringstream sss;
+                    sss << S;
+                    auto sString = sss.str();
+
+                    if (isSystemInconsistent(systemPPrimeQPrimeForPair)) {
+                        continue;
+                    }
+
                     if (rankPQSystem == 2 * n && isSymplectic(S, d)) {
                         const auto pPrime_qPrime_Vec =
                             recoverPPrimeQPrimeVecFromSystem(systemPPrimeQPrimeForPair, n);
@@ -122,19 +216,34 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
                 // Good systems; use them for the next iteration
                 trimZeroRowsFromBottom(systemSForPair);
                 trimZeroRowsFromBottom(systemPPrimeQPrimeForPair);
-                thisSystemForS = systemSForPair;
-                thisSystemForPPrimeQPrime = systemPPrimeQPrimeForPair;
+                // thisSystemForS = systemSForPair;
+                // thisSystemForPPrimeQPrime = systemPPrimeQPrimeForPair;
                 // The recursion below will advance the index i
             }
 
             std::unordered_set<size_t> thisSelected = selectedVecMIndices;
             thisSelected.insert(i);
+
+            std::vector<long> vVec;
+            for (size_t ind = 0; ind < v.size(); ind++) {
+                vVec.push_back(v(ind));
+            }
+            std::vector<long> vMapVec;
+            for (size_t ind = 0; ind < vMap.size(); ind++) {
+                vMapVec.push_back(vMap(ind));
+            }
+
+            std::vector newMappings(mappings);
+            newMappings.push_back({std::move(vVec), std::move(vMapVec)});
+
             const auto recursiveResult = findSymplecticMatrixRecurse(
                 d, n, omega, M, M_p, Mprime_p, Mmap, Mprimemap, sortedKeys, maxKeyIndex,
                 lastKeyIndex, std::make_optional(systemSForPair),
-                std::make_optional(systemPPrimeQPrimeForPair), std::move(thisSelected));
+                std::make_optional(systemPPrimeQPrimeForPair), std::move(thisSelected), std::move(newMappings));
             if (recursiveResult) {
                 return recursiveResult;
+            } else {
+                std::stringstream ss1;
             }
         }
     }
@@ -142,7 +251,7 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecti
     return findSymplecticMatrixRecurse(
         d, n, omega, M, M_p, Mprime_p, Mmap, Mprimemap, sortedKeys, maxKeyIndex,
         /* Advance the key index; unable to find in current bin */ lastKeyIndex + 1,
-        std::move(thisSystemForS), std::move(thisSystemForPPrimeQPrime), {});
+        std::move(thisSystemForS), std::move(thisSystemForPPrimeQPrime), {}, {});
 }
 
 std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>>

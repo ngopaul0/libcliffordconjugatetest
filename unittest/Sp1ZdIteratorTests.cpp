@@ -40,6 +40,26 @@ void runUniquenessTest(size_t d) {
     SECTION("Generates unique symplectic matrices: d = " #dval) { runUniquenessTest(dval); }
 
 TEST_CASE("Sp1ZdIterator", "[sp1zditerator]") {
+    SECTION("Find [2, 0; 0, 2]") {
+        size_t d = 3;
+        Sp1ZdMatrixRange iterator(d);
+        size_t i = 0;
+
+        Sp1ZdMatrix target;
+        target << 2, 0, 0, 2;
+
+        Sp1ZdMatrix omega;
+        omega << 0, 1, 2, 0;
+        REQUIRE(modMatrix(target.transpose() * omega * target, d) == omega);
+
+        for (const auto& S : iterator) {
+            if (S == target) {
+                return;
+            }
+        }
+        FAIL("unable to find matrix");
+    }
+
     SECTION("Generates valid symplectic matrices") {
         for (size_t d : {3, 5, 7, 11, 13, 17, 19, 23, 29}) {
             INFO("d = " << d);

@@ -172,7 +172,220 @@ TEST_CASE("vectorisation", "[vectorisationalgorithm]") {
         REQUIRE(fromSystemS == S);
     }
 
+    SECTION("Matrix vectorisation algorithm flow - mapping from failing test") {
+        constexpr size_t d = 3;
+        constexpr size_t n = 2;
 
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> S(2*n, 2*n);
+        S << 2, 0, 0, 0,
+             0, 2, 0, 0,
+             0, 0, 1, 0,
+             0, 0, 0, 1;
+
+        // INITIAL:
+        Eigen::Vector<long, 4> v1(0, 1, 2, 0);
+        Eigen::Vector<long, 4> mappedSv1 = modMatrix(S * v1, d);
+
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> system = createSystemForS(v1, mappedSv1);
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> expectedState;
+        expectedState.resize(system.rows(), system.cols());
+        expectedState << 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, mappedSv1(0),
+                         0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, mappedSv1(1),
+                         0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, mappedSv1(2),
+                         0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, mappedSv1(3);
+        CHECK(expectedState.rows() == system.rows());
+        REQUIRE(expectedState.cols() == system.cols());
+        REQUIRE(expectedState == system);
+
+        auto rank = reduceToREFAndGetRank(system, d, true);
+        REQUIRE(rank == 4);
+        REQUIRE(expectedState == system);
+
+        //e1 = {0, 1, 2, 1};
+        //e2 = {0, 2, 2, 1};
+        Eigen::Vector<long, 4> v2(0, 1, 2, 1);
+        Eigen::Vector<long, 4> mappedSv2 = modMatrix(S * v2, d);
+
+        appendToSystemForS(system, v2, mappedSv2);
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> expectedState2;
+        expectedState2.resize(system.rows(), system.cols());
+        expectedState2 << 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, mappedSv1(0),
+                          0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, mappedSv1(1),
+                          0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, mappedSv1(2),
+                          0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, mappedSv1(3),
+                          0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, mappedSv2(0),
+                          0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, mappedSv2(1),
+                          0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 1, 0, mappedSv2(2),
+                          0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 1, mappedSv2(3);
+        CHECK(expectedState2.rows() == system.rows());
+        REQUIRE(expectedState2.cols() == system.cols());
+        REQUIRE(expectedState2 == system);
+
+        rank = reduceToREFAndGetRank(system, d, true);
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> expectedRREF1;
+        expectedRREF1.resize(system.rows(), system.cols());
+        expectedRREF1 << 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0,
+                         0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 2,
+                         0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2,
+                         0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0,
+                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1;
+        REQUIRE(rank == 8);
+        REQUIRE(expectedRREF1 == system);
+
+        // e1 = {1, 2, 2, 1};
+        // e2 = {2, 1, 2, 1};
+        Eigen::Vector<long, 4> v3(1, 2, 2, 1);
+        Eigen::Vector<long, 4> mappedSv3 = modMatrix(S * v3, d);
+
+        appendToSystemForS(system, v3, mappedSv3);
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> expectedState3;
+        expectedState3.resize(system.rows(), system.cols());
+        expectedState3 << 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0,
+                         0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 2,
+                         0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2,
+                         0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0,
+                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+                         1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, mappedSv3(0),
+                         0, 1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, mappedSv3(1),
+                         0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 1, 0, mappedSv3(2),
+                         0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 1, mappedSv3(3);
+        CHECK(expectedState3.rows() == system.rows());
+        REQUIRE(expectedState3.cols() == system.cols());
+        REQUIRE(expectedState3 == system);
+
+        rank = reduceToREFAndGetRank(system, d, true);
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> expectedRREF2;
+        expectedRREF2.resize(system.rows(), system.cols());
+        expectedRREF2 << 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2,
+                         0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+                         0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1,
+                         0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                         0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0,
+                         0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 2,
+                         0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2,
+                         0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0,
+                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1;
+        REQUIRE(rank == 12);
+        REQUIRE(expectedRREF2 == system);
+    }
+
+    SECTION("Matrix vectorisation algorithm flow - mapping from failing test 2") {
+        constexpr size_t d = 3;
+        constexpr size_t n = 2;
+
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> S(2*n, 2*n);
+        S << 2, 0, 0, 0,
+             0, 2, 0, 0,
+             0, 0, 1, 0,
+             0, 0, 0, 1;
+
+        // INITIAL:
+        Eigen::Vector<long, 4> v1(0, 1, 2, 0);
+        Eigen::Vector<long, 4> mappedSv1 = modMatrix(S * v1, d);
+
+        Eigen::Vector<long, 4> v2(0, 1, 2, 1);
+        Eigen::Vector<long, 4> mappedSv2 = modMatrix(S * v2, d);
+
+        Eigen::Vector<long, 4> v3(1, 2, 2, 0);
+        Eigen::Vector<long, 4> mappedSv3 = modMatrix(S * v3, d);
+
+        Eigen::Vector<long, 4> v4(1, 2, 2, 1);
+        Eigen::Vector<long, 4> mappedSv4 = modMatrix(S * v4, d);
+        Eigen::Vector<long, 4> v5(2, 2, 2, 0);
+        Eigen::Vector<long, 4> mappedSv5 = modMatrix(S * v5, d);
+
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> X(4, 4);
+        X.col(0) = v1;
+        X.col(1) = v2;
+        X.col(2) = v3;
+        X.col(3) = v4;
+        const size_t rankOfX = reduceToREFAndGetRank(X, d, true);
+        CHECK(rankOfX == 3);
+
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> system =
+            createSystemForS(v1, mappedSv1);
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> runningRREF = system;
+        appendToSystemForS(system, v2, mappedSv2);
+        reduceToREFAndGetRank(runningRREF, d, true);
+        appendToSystemForS(system, v3, mappedSv3);
+        reduceToREFAndGetRank(runningRREF, d, true);
+        appendToSystemForS(system, v4, mappedSv4);
+        reduceToREFAndGetRank(runningRREF, d, true);
+
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> expectedSystem;
+        expectedSystem.resize(system.rows(), system.cols());
+        expectedSystem << 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0,
+                         0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 2,
+                         0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2,
+                         0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0,
+                         0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 0,
+                         0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 2,
+                         0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 1, 0, 2,
+                         0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 1, 1,
+                         1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2,
+                         0, 1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 1,
+                         0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2,
+                         0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0,
+                         1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 2,
+                         0, 1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 1,
+                         0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 1, 0, 2,
+                         0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 1, 1;
+        REQUIRE(expectedSystem == system);
+
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> rrefSystem = system;
+        const size_t rankSystem = reduceToREFAndGetRank(rrefSystem, d, true);
+        CHECK(rankSystem == 12);
+        REQUIRE(expectedSystem == system);
+        // e1 = {2, 2, 2, 0};
+        // e2 = {1, 1, 2, 0};
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> X2(4, 5);
+        X2.col(0) = v1;
+        X2.col(1) = v2;
+        X2.col(2) = v3;
+        X2.col(3) = v4;
+        X2.col(4) = v5;
+        const size_t rankOfX2 = reduceToREFAndGetRank(X2, d, true);
+        CHECK(rankOfX2 == 4);
+
+        appendToSystemForS(system, v5, mappedSv5);
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> expectedSystem2;
+        expectedSystem2.resize(system.rows(), system.cols());
+        expectedSystem2 << 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0,
+                         0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 2,
+                         0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2,
+                         0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0,
+                         0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 0,
+                         0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 2,
+                         0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 1, 0, 2,
+                         0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 1, 1,
+                         1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2,
+                         0, 1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 1,
+                         0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2,
+                         0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0,
+                         1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 2,
+                         0, 1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 1,
+                         0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 1, 0, 2,
+                         0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 1, 1,
+                         2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1,
+                         0, 2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 1,
+                         0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2,
+                         0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0;
+        REQUIRE(expectedSystem2 == system);
+
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> rrefSystem2 = system;
+        const size_t rankSystem2 = reduceToREFAndGetRank(rrefSystem2, d, true);
+        CHECK(rankSystem2 == 16);
+        REQUIRE(expectedSystem2 == rrefSystem2);
+    }
 }
 
 TEST_CASE("findSymplecticMatrix", "[vectorisationalgorithm][findSymplecticMatrix]") {

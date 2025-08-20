@@ -424,6 +424,14 @@ TEST_CASE("multiple Pauli basis elements", "[multiple]") {
     }
 }
 
+Eigen::MatrixXcd computeMSum(size_t d, std::vector<std::pair<long, long>> coords, size_t inv_2, const std::complex<double>& omega) {
+    Eigen::MatrixXcd sum = Eigen::MatrixXcd::Zero(d, d);
+    for (const auto& [p, q] : coords) {
+        sum += W(d, p, q, inv_2, omega);
+    }
+    return sum;
+}
+
 TEST_CASE("Multi qudit case", "[multiqudit]") {
     SECTION("d=3, 2 qudits", "[generalized][d=3][n=2]") {
         const int d = 3; // Example dimension
@@ -431,8 +439,18 @@ TEST_CASE("Multi qudit case", "[multiqudit]") {
         const int inv_2 = modInverse(2, d);
         const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));
         constexpr std::complex<double> complexFor2ndTuple = {-1, 3};
-        const Eigen::MatrixXcd M1 = W(d, 1, 2, inv_2, omega) + complexFor2ndTuple * W(d, 0, 1, inv_2, omega) + W(d, 0,0, inv_2, omega);
-        const Eigen::MatrixXcd M2 = 3 * W(d, 2, 2, inv_2, omega) + W(d, 2, 0, inv_2, omega) + W(d, 0,1, inv_2, omega);
+        const std::vector<std::pair<long, long>> coords1 = {{1,2}, {0,1}, {2,2}};
+        const std::vector<std::pair<long, long>> coords2 = {{2,1}, {2,0}};
+
+        std::vector<Eigen::Vector<long, 4>> allTuples;
+        for (const auto& [p, q] : coords1) {
+            for (const auto& [r, s] : coords2) {
+                allTuples.push_back({p, q, r, s});
+            }
+        }
+
+        const Eigen::MatrixXcd M1 = computeMSum(d, coords1, inv_2, omega);
+        const Eigen::MatrixXcd M2 = computeMSum(d, coords2, inv_2, omega);
         const Eigen::MatrixXcd M = Eigen::kroneckerProduct(M1, M2);
 
         const Eigen::MatrixXcd C1 = cliffordPermutationGate(d, 2);
@@ -481,10 +499,14 @@ TEST_CASE("Multi qudit case", "[multiqudit]") {
             MprimeMap.insertEntryNTuple(std::move(tuple), val);
         }
 
+        std::vector<std::array<long, 4>> allTuplesMapped;
+        for (const auto& tuple : allTuples) {
+            Eigen::Vector<long, Eigen::Dynamic> prod = modMatrix(S * tuple, d);
+            allTuplesMapped.push_back({prod(0), prod(1), prod(2), prod(3)});
+        }
 
         Eigen::Vector<long, 4> pPrimeQPrimeVec(pPrime1, qPrime1, pPrime2, qPrime2);
-        const auto res = test_clifford_conjugate_lemma_10(d, pPrimeQPrimeVec, omega, M, M_p, Mprime_p, S);
-        REQUIRE(res);
+        REQUIRE(test_clifford_conjugate_lemma_10(d, pPrimeQPrimeVec, omega, M, M_p, Mprime_p, S));
 
         REQUIRE(isCliffordConjugateGeneralized(d, n, M, Mprime));
     }

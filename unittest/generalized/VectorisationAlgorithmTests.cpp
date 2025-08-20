@@ -85,4 +85,85 @@ TEST_CASE("vectorisation", "[vectorisationalgorithm]") {
         INFO("XtranposeTensorITimesVecS = " << XtranposeTensorITimesVecS);
         REQUIRE(XtranposeTensorITimesVecS == vecExpectedSX);
     }
+
+    SECTION("Matrix vectorisation algorithm flow - correct mappings") {
+        constexpr size_t d = 5;
+        constexpr size_t n = 1;
+
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> S(2*n, 2*n);
+        S << 2, 2,
+             0, 2;
+
+        // INITIAL:
+        Eigen::Vector<long, 2> v1(1, 2);
+        Eigen::Vector<long, 2> mappedSv1 = modMatrix(S * v1, d);
+
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> system = createSystem(v1, mappedSv1);
+        Eigen::Matrix<long, 2, 4 + 1> expectedState;
+        expectedState << 1, 0, 2, 0, 1,
+                         0, 1, 0, 2, 4;
+        REQUIRE(expectedState == system);
+
+        const auto rank = reduceToREFAndGetRank(system, d, true);
+        REQUIRE(rank == 2);
+        // no change
+        REQUIRE(expectedState == system);
+
+        // SECOND:
+        // Appending a vector that's linearly dependent would result in just zero rows
+        Eigen::Vector<long, 2> v2(2, 4);
+        Eigen::Vector<long, 2> mappedSv2 = modMatrix(S * v2, d);
+        size_t rowsBefore = system.rows();
+        CHECK(rowsBefore == 2);
+        appendToSystem(system, v2, mappedSv2);
+        size_t rowsAfter = system.rows();
+        CHECK(rowsAfter == 4);
+        Eigen::Matrix<long, 4, 4 + 1> expectedState2;
+        expectedState2 << 1, 0, 2, 0, 1,
+                          0, 1, 0, 2, 4,
+                          2, 0, 4, 0, mappedSv2(0),
+                          0, 2, 0, 4, mappedSv2(1);
+        REQUIRE(expectedState2 == system);
+
+        const auto rank2 = reduceToREFAndGetRank(system, d, true);
+        REQUIRE(rank2 == 2);
+        // RREF change
+        Eigen::Matrix<long, 4, 4 + 1> expectedState2RREF;
+        expectedState2RREF << 1, 0, 2, 0, 1,
+                              0, 1, 0, 2, 4,
+                              0, 0, 0, 0, 0,
+                              0, 0, 0, 0, 0;
+        REQUIRE(expectedState2RREF == system);
+
+        // THIRD:
+        // Now add a vector mapping that's linearly independent.
+        Eigen::Vector<long, 2> v3(1, 3);
+        Eigen::Vector<long, 2> mappedSv3 = modMatrix(S * v3, d);
+        rowsBefore = system.rows();
+        CHECK(rowsBefore == 4);
+        appendToSystem(system, v3, mappedSv3);
+        rowsAfter = system.rows();
+        CHECK(rowsAfter == 6);
+        Eigen::Matrix<long, 6, 4 + 1> expectedState3;
+        expectedState3 << 1, 0, 2, 0, 1,
+                          0, 1, 0, 2, 4,
+                          0, 0, 0, 0, 0,
+                          0, 0, 0, 0, 0,
+                          1, 0, 3, 0, mappedSv3(0),
+                          0, 1, 0, 3, mappedSv3(1);
+        REQUIRE(expectedState3 == system);
+        // RREF should result in finding rank 4, since 2 linearly independent vectors form a basis
+        // which completely determines a linear transform in the space
+        const auto rank3 = reduceToREFAndGetRank(system, d, true);
+        REQUIRE(rank3 == 4);
+        Eigen::Matrix<long, 6, 4 + 1> expectedState3RREF;
+        expectedState3RREF << 1, 0, 0, 0, 2,
+                              0, 1, 0, 0, 0,
+                              0, 0, 1, 0, 2,
+                              0, 0, 0, 1, 2,
+                              0, 0, 0, 0, 0,
+                              0, 0, 0, 0, 0;
+        REQUIRE(expectedState3RREF == system);
+        // It's clear the solution of this system gets back S
+    }
 }

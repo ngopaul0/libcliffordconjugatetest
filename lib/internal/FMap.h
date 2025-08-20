@@ -219,7 +219,7 @@ struct FMap {
         return std::nullopt;
     }
 
-    std::vector<FMapKey> sortedKeys() {
+    std::vector<FMapKey> sortedKeys() const {
         std::vector<FMapKey> keys;
         keys.reserve(map_.size());
         for (const auto& key : map_ | std::views::keys) {

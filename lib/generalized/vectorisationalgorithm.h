@@ -2,6 +2,7 @@
 #define VECTORISATIONALGORITHM_H
 
 #include <Eigen/Dense>
+#include "internal/FMap.h"
 // ReSharper disable once CppUnusedIncludeDirective
 #include "unsupported/Eigen/KroneckerProduct"
 
@@ -42,9 +43,49 @@ Eigen::Map<Eigen::Vector<typename MatrixType::Scalar, Eigen::Dynamic>> vecOperat
     return Eigen::Map<Eigen::Vector<typename MatrixType::Scalar, Eigen::Dynamic>>(X.data(), X.size());
 }
 
-// inline Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> findSymplectic() {
+/**
+ * Modifies the matrix A in place to create the matrix [A v] (A augmented with vector v).
+ */
+template <typename MatrixType, typename VectorType>
+void augmentAWithVec(MatrixType& A, const VectorType& v) {
+    assert(A.rows() == v.rows());
+    A.conservativeResize(Eigen::NoChange, A.cols() + 1);
+    A.col(A.cols() - 1) = v;
+}
 
-//}
+template <typename VectorType>
+auto createSystem(const VectorType& v, const VectorType& vMap) {
+    using Scalar = typename VectorType::Scalar;
+    Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> newBottomRows = createXtransposeTensorI(v);
+    augmentAWithVec(newBottomRows, vMap);
+    return newBottomRows;
+}
+
+template <typename MatrixType, typename VectorType>
+void appendToSystem(MatrixType& existingRREFSystem, const VectorType& v, const VectorType& vMap) {
+    using Scalar = typename VectorType::Scalar;
+    // Evaluate this explicitly so it can be augmented.
+    Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> newBottomRows = createXtransposeTensorI(v);
+    augmentAWithVec(newBottomRows, vMap);
+
+    existingRREFSystem.conservativeResize(existingRREFSystem.rows() + newBottomRows.rows(), Eigen::NoChange);
+    // Copy newBottomRows into the newly created rows at the bottom of existingRREFSystem
+    existingRREFSystem.bottomRows(newBottomRows.rows()) = newBottomRows;
+}
+
+template <typename MatrixType>
+void trimZeroRowsFromBottom(MatrixType& M) {
+    long newRows = 0;
+
+    for (long i = M.rows() - 1; i >= 0; --i) {
+        if (!M.row(i).isZero()) {
+            newRows = i + 1;
+            break;
+        }
+    }
+
+    M.conservativeResize(newRows, Eigen::NoChange);
+}
 
 } // namespace cliffconjtest
 

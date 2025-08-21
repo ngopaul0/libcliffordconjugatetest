@@ -1,7 +1,6 @@
 #include "vectorisationalgorithm.h"
 
-#include <Eigen/src/Core/Matrix.h>
-#include <Eigen/src/Core/util/Constants.h>
+#include <Eigen/Dense>
 #include <optional>
 #include <random>
 #include <unordered_set>
@@ -14,9 +13,8 @@ namespace cliffconjtest {
 using CliffPermutationSysMatrix = Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>;
 using PPrimeQPrimeSysMatrix = Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>;
 
-using MappingHistory =
-    std::unordered_map<size_t, std::unordered_map<size_t, std::unordered_set<size_t>>>;
-using AllowedVecMIndicesByKey = std::unordered_map<size_t, std::unordered_set<size_t>>;
+using MappingHistory = std::unordered_map<size_t, std::unordered_map<size_t, size_t>>;
+using VecMIndicesSetByKey = std::unordered_map<size_t, std::unordered_set<size_t>>;
 
 static size_t s_numRecursiveCalls = 0;
 
@@ -42,10 +40,10 @@ struct RecursionContext {
     /**
      * Modifiable and read across all recursive calls
      * Stores the keys in Mmap_ that we are allowed to look at. The idea behind this is that
-     * once the system for S is consistent with one unique solution, we have found a basis inside of
-     * Mmap_.
+     * once the system for S is consistent with one unique solution, there's no need to look at
+     * other vectors in MNap.
      */
-    AllowedVecMIndicesByKey allowedKeys_;
+    VecMIndicesSetByKey allowedKeys_;
 
     MappingHistory history_;
 
@@ -55,15 +53,26 @@ struct RecursionContext {
     }
 
   private:
-    void setAllowedKeysIfNeeded(const size_t lastKeyIndex, const size_t i) {
+    void useHistoryToFillAllowedKeysIfNeeded(const size_t lastKeyIndex, const size_t i) {
         if (allowedKeys_.empty()) {
             allowedKeys_[lastKeyIndex].insert(i);
-            for (auto& [key, vec] : history_) {
+            for (const auto& [key, vec] : history_) {
                 for (const auto& vInd : vec | std::views::keys) {
                     allowedKeys_[key].insert(vInd);
                 }
             }
         }
+    }
+
+    bool shouldSkipThisVecMKey(const size_t lastKeyIndex, size_t i) {
+        // This will be nonempty when we encounter a full-rank system for S in which case
+        // we limit it to examining the vectors that allow us to recover S.
+        if (!allowedKeys_.empty()) {
+            if (!allowedKeys_[lastKeyIndex].contains(i)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecticMatrixRecurse(
@@ -74,8 +83,8 @@ struct RecursionContext {
 
         s_numRecursiveCalls++;
 
-        // assert(maxVecsMIndex < Mmap.size());
         if (lastKeyIndex > maxKeyIndex_ || lastKeyIndex >= sortedKeys_.size()) {
+            // RECURSION END: There are no more points to check.
             return std::nullopt;
         }
 
@@ -86,24 +95,34 @@ struct RecursionContext {
             throw std::invalid_argument("map size mismatch");
         }
 
+        // The loops are used to go to the next mapping possibility if one fails.
+        // The loops are not used to go down the bin and choose vectors for mapping.
+        // The logic for going down the bins is recursively handled.
+        //
+        // If a mapping is plausible (i.e. the systems are consistent), a recursive call is made
+        // try to map the other vectors.
         for (size_t i = 0; i < vecsM.size(); ++i) {
             if (history_[lastKeyIndex].contains(i)) {
                 continue;
             }
-            if (!allowedKeys_.empty()) {
-                if (!allowedKeys_[lastKeyIndex].contains(i)) {
-                    continue;
-                }
+            if (shouldSkipThisVecMKey(lastKeyIndex, i)) {
+                continue;
             }
 
             const auto& v = vecsM[i];
-            // Test the validity of a symplectic matrix mapping v to vMap
+            // Test the validity of a symplectic matrix mapping v to vMap.
+            // If this inner loop continues, that means that particular mapping failed, and the
+            // next iteration is looking at another mapping possibility.
             for (size_t j = 0; j < vecsMprime.size(); ++j) {
                 if (selectedVecMprimeIndices.contains(j)) {
                     continue;
                 }
+                if (shouldSkipThisVecMKey(lastKeyIndex, i)) {
+                    continue;
+                }
 
                 const auto& vMap = vecsMprime[j];
+                // Will create a copy of the system
                 CliffPermutationSysMatrix systemSForPair;
                 PPrimeQPrimeSysMatrix systemPPrimeQPrimeForPair;
 
@@ -128,32 +147,33 @@ struct RecursionContext {
                     const size_t rankPQSystem =
                         reduceToREFAndGetRank(systemPPrimeQPrimeForPair, d_, true);
 
+                    if (rankPQSystem > 2 * n_ || isSystemInconsistent(systemPPrimeQPrimeForPair)) {
+                        continue;
+                    }
+
                     // TODO: Optimize this to only reduce the bottom row
+                    //  An Eigen sparse matrix could also be used to reduce space.
                     appendToSystemForS(systemSForPair, v, vMap);
 
                     const size_t rank = reduceToREFAndGetRank(systemSForPair, d_, true);
 
                     // Since S is vectorised, the rank should be the number of entries in S, i.e.
-                    // it's an (2n) x (2n) symplectic matrix
+                    // it's a (2n) x (2n) symplectic matrix
                     if (rank == (2 * n_) * (2 * n_)) {
-                        // Found vectors that are linearly independent; do not look at other keys.
-                        // The vectors that we have selected from MMap contain a basis already.
-                        //
-                        // These are maintained across all recursive calls.
+                        // Found vectors that can determine S; do not look at other keys for the
+                        // rest of the recursive calls.
+                        // Now we just have to find the right mapping.
                         maxKeyIndex_ = lastKeyIndex;
-                        setAllowedKeysIfNeeded(lastKeyIndex, i);
+                        useHistoryToFillAllowedKeysIfNeeded(lastKeyIndex, i);
                         Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> S =
                             recoverSFromSystem(systemSForPair, n_);
-
-                        if (isSystemInconsistent(systemPPrimeQPrimeForPair)) {
-                            continue;
-                        }
 
                         if (rankPQSystem == 2 * n_ && isSymplectic(S, d_)) {
                             const auto pPrime_qPrime_Vec =
                                 recoverPPrimeQPrimeVecFromSystem(systemPPrimeQPrimeForPair, n_);
                             if (test_clifford_conjugate_lemma_10(d_, pPrime_qPrime_Vec, omega_, M_,
                                                                  M_p_, Mprime_p_, S)) {
+                                // RECURSION END: We have found a valid S that satisfies Lemma 10.
                                 return std::make_optional(S);
                             }
                         }
@@ -168,30 +188,42 @@ struct RecursionContext {
                     trimZeroRowsFromBottom(systemPPrimeQPrimeForPair);
                     // The recursion below will advance the index i
                 }
-
+                // At this point, we are trying to see if there is the desired symplectic
+                // transformation S that maps v to vMap.
 
                 // Create a separate set to maintain amortized O(1) checks
                 std::unordered_set<size_t> thisSelectedMprime = selectedVecMprimeIndices;
                 thisSelectedMprime.insert(j);
 
-                // Push history onto "stack"
-                history_[lastKeyIndex][i].insert(j);
-                const auto isThisMappingCorrect = findSymplecticMatrixRecurse(
+                // Push history like a stack so that recursive calls are aware of exactly which
+                // vectors we have mapped already. As S is a permutation, a one-to-one
+                // correspondence is necessary.
+                // Note the [] operator will create a map/set if not present yet.
+                history_[lastKeyIndex][i] = j;
+                // Now that we have a mapping of vecM[i] to vecMprime[j], the recursion below will
+                // advance the index i to examine another vector in vecM. This is the main step of
+                // moving down through the bins.
+                const auto mappingResult = findSymplecticMatrixRecurse(
                     lastKeyIndex, std::make_optional(systemSForPair),
                     std::make_optional(systemPPrimeQPrimeForPair), std::move(thisSelectedMprime));
-                if (isThisMappingCorrect) {
-                    return isThisMappingCorrect;
+                if (mappingResult) {
+                    // If we're here, then this mapping is a success
+                    return mappingResult;
                 }
-                // Pop history off "stack"
-                size_t countRemoved = history_[lastKeyIndex][i].erase(j);
-                if (countRemoved != 1) {
+                // If we're here, then mapping this v from M to vMap from Mprime didn't work, so
+                // continue the loop and try to map v to another vector from Mprime with the same
+                // map key.
+                //
+                // Since the mapping did not work, do not use this mapping in the history. Pop
+                // history off like a stack.
+                //
+                // We'll also discard the system for this mapping and recopy the previous system
+                // from the start of the recursive call. Again, if the loop advances, it means
+                // another possible mapping is being tried.
+                if (const size_t countRemoved = history_[lastKeyIndex].erase(i);
+                    countRemoved != 1) {
                     throw std::runtime_error("unexpected bad history state");
                 }
-                if (history_[lastKeyIndex][i].empty()) {
-                    history_[lastKeyIndex].erase(i);
-                }
-                // If we're here, then mapping this v to vMap didn't work, so try again with anohter
-                // vMap.
             }
         }
 

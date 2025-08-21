@@ -495,13 +495,6 @@ TEST_CASE("Multi qudit case", "[multiqudit]") {
         const std::vector<std::pair<long, long>> coords1 = {{1,2}, {0,1}, {2,2}};
         const std::vector<std::pair<long, long>> coords2 = {{2,1}, {2,0}};
 
-        std::vector<Eigen::Vector<long, 4>> allTuples;
-        for (const auto& [p, q] : coords1) {
-            for (const auto& [r, s] : coords2) {
-                allTuples.push_back({p, q, r, s});
-            }
-        }
-
         const Eigen::MatrixXcd M1 = computeMSum(d, coords1, inv_2, omega);
         const Eigen::MatrixXcd M2 = computeMSum(d, coords2, inv_2, omega);
         const Eigen::MatrixXcd M = Eigen::kroneckerProduct(M1, M2);

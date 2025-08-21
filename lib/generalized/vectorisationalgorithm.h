@@ -82,8 +82,8 @@ void appendToSystemForS(MatrixType& existingRREFSystem, const VectorType& v,
 }
 
 /**
- * From known pq_vecs = (p_1, ..., p_n, q_1, ..., q_n) and unknown pPrime_qPrime_vec = (p_1',...,p_n',q_1',...,q_n'),
- * computes a system of equations of the form
+ * From known pq_vecs = (p_1, ..., p_n, q_1, ..., q_n) and unknown pPrime_qPrime_vec =
+ * (p_1',...,p_n',q_1',...,q_n'), computes a system of equations of the form
  *
  *     symplecticProduct(pq_vec, pPrime_qPrime_vec) = k.
  *
@@ -115,7 +115,7 @@ template <typename VectorType>
 auto createSystemForPPrimeQPrime(const size_t d, const VectorType& pq_vec, const size_t k) {
     using Scalar = typename VectorType::Scalar;
     const size_t twoTimes_n = pq_vec.rows();
-    const long n = twoTimes_n / 2;;
+    const long n = twoTimes_n / 2;
     Eigen::RowVector<Scalar, Eigen::Dynamic> row(pq_vec.rows() + 1);
     for (size_t i = 0; i < n; i++) {
         size_t pIndex = i;
@@ -204,7 +204,8 @@ bool isSystemInconsistent(const MatrixType& matrixRREF) {
  * @return Whether the 2n x 2n matrix M is essentially a block diagonal matrix (2x2 blocks)
  * with symplectic matrices as the diagonal blocks
  */
-inline bool checkIfBlockDiagonalAndEachBlockSymplectic(const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& M, size_t d) {
+inline bool checkIfBlockDiagonalAndEachBlockSymplectic(
+    const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& M, size_t d) {
     // Get the dimensions of the matrix.
     long rows = M.rows();
     long cols = M.cols();
@@ -246,12 +247,15 @@ inline bool checkIfBlockDiagonalAndEachBlockSymplectic(const Eigen::Matrix<long,
                 continue;
             }
 
-            bool inCurrentBlock = (rowIndexToCheck >= startRow && rowIndexToCheck < startRow + blockSize);
-            // If the element is not in any of the diagonal blocks and is not zero, the matrix is not block diagonal.
+            bool inCurrentBlock =
+                (rowIndexToCheck >= startRow && rowIndexToCheck < startRow + blockSize);
+            // If the element is not in any of the diagonal blocks and is not zero, the matrix is
+            // not block diagonal.
             if (!inCurrentBlock && M(rowIndexToCheck, c) != 0) {
                 return false;
             }
-            inCurrentBlock = (rowIndexToCheck2 >= startRow && rowIndexToCheck2 < startRow + blockSize);
+            inCurrentBlock =
+                (rowIndexToCheck2 >= startRow && rowIndexToCheck2 < startRow + blockSize);
             if (!inCurrentBlock && M(rowIndexToCheck2, c) != 0) {
                 return false;
             }
@@ -286,29 +290,14 @@ inline bool isSymplectic(const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynami
         return safeMod(S(0, 0) * S(1, 1) - S(0, 1) * S(1, 0), d) == 1;
     }
 
-    // Construct the standard symplectic matrix, J
-    Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> J =
+    // Construct the standard symplectic matrix, Ω
+    Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> Omega =
         Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>::Zero(2 * n, 2 * n);
-    J.topRightCorner(n, n).setIdentity();
-    J.bottomLeftCorner(n, n).setIdentity();
-    J.bottomLeftCorner(n, n) *= static_cast<long>(d - 1);
-#ifndef NDEBUG
-    std::stringstream ss;
-    ss << J;
-    auto s = ss.str();
-
-    std::stringstream sss;
-    sss << S;
-    auto sString = sss.str();
-#endif
-    // Definition of symplectic S^T * J * S = J
-    auto lhs = modMatrix(S.transpose() * J * S, d);
-#ifndef NDEBUG
-    std::stringstream sssLhs;
-    sssLhs << lhs;
-    auto lhsString = sssLhs.str();
-#endif
-    return lhs == J;
+    Omega.topRightCorner(n, n).setIdentity();
+    Omega.bottomLeftCorner(n, n).setIdentity();
+    Omega.bottomLeftCorner(n, n) *= static_cast<long>(d - 1);
+    // Definition of symplectic S^T * Ω * S = Ω
+    return modMatrix(S.transpose() * Omega * S, d) == Omega;
 }
 
 size_t returnLastNumRecursiveCalls();

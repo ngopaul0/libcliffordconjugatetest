@@ -248,13 +248,13 @@ std::complex<double> f_multiqudit(const Eigen::Ref<const Eigen::MatrixXcd>& M,
  * @return The rank of A
  */
 template <typename MatrixType>
-size_t reduceToREFAndGetRank(MatrixType& A, const int p, bool shouldReduce = false) {
+size_t reduceToREFAndGetRank(MatrixType& A, const long p, const bool shouldReduce = false) {
     auto rows = A.rows();
     auto cols = A.cols();
 
-    size_t rank = 0;
-    int pivotRow = 0;
-    int pivotCol = 0;
+    long rank = 0;
+    long pivotRow = 0;
+    long pivotCol = 0;
     while (pivotRow < rows && pivotCol < cols) {
         // Find a non-zero pivot
         int iMax = pivotRow;

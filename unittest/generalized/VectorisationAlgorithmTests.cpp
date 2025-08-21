@@ -70,7 +70,7 @@ TEST_CASE("vectorisation", "[vectorisationalgorithm]") {
         S << 2, 2,
              0, 2;
 
-        auto SX = modMatrix(S * X, d);
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> SX = modMatrix(S * X, d);
 
         Eigen::Matrix<long, 2, 2> expectedSX;
         expectedSX << 1, 2,

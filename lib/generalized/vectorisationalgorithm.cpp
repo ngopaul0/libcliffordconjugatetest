@@ -45,6 +45,8 @@ struct RecursionContext {
      */
     VecMIndicesSetByKey allowedKeys_;
 
+    VecMIndicesSetByKey disallowedKeys_;
+
     MappingHistory history_;
 
     [[nodiscard]] std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>>
@@ -53,11 +55,34 @@ struct RecursionContext {
     }
 
   private:
+
+    bool areConstantMultiples(const MatrixCoordinate& v1, const MatrixCoordinate& v2) const {
+        // Find the first non-zero element in v2 modulo d
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> M(v1.rows(), 2);
+        M.col(0) = v1;
+        M.col(0) = v2;
+        return reduceToREFAndGetRank(M, d_, false) == 2;
+    }
+
+    bool searchForLinearDependentVector(const MatrixCoordinate& v1) {
+        for (const auto& [index, mapForIndex] : history_) {
+            const auto& key = sortedKeys_[index];
+            const auto& vecsM = Mmap_.get(key);
+            for (const auto& vInd : mapForIndex | std::views::keys) {
+                const MatrixCoordinate& v2 = vecsM[vInd];
+                if (areConstantMultiples(v1, v2)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     void useHistoryToFillAllowedKeysIfNeeded(const size_t lastKeyIndex, const size_t i) {
         if (allowedKeys_.empty()) {
             allowedKeys_[lastKeyIndex].insert(i);
-            for (const auto& [key, vec] : history_) {
-                for (const auto& vInd : vec | std::views::keys) {
+            for (const auto& [key, mapForKey] : history_) {
+                for (const auto& vInd : mapForKey | std::views::keys) {
                     allowedKeys_[key].insert(vInd);
                 }
             }
@@ -72,6 +97,12 @@ struct RecursionContext {
                 return true;
             }
         }
+        // This will be nonempty if we find linearly dependent vectors
+        if (!disallowedKeys_.empty()) {
+            if (disallowedKeys_[lastKeyIndex].contains(i)) {
+                return true;
+            }
+        }
         return false;
     }
 
@@ -79,7 +110,8 @@ struct RecursionContext {
         const size_t lastKeyIndex = 0,
         std::optional<CliffPermutationSysMatrix>&& systemForS = std::nullopt,
         std::optional<PPrimeQPrimeSysMatrix>&& systemForPPrimeQPrime = std::nullopt,
-        const std::unordered_set<size_t>&& selectedVecMprimeIndices = {}) {
+        const std::unordered_set<size_t>&& selectedVecMprimeIndices = {},
+        const size_t lastSystemSRank = 0) {
 
         s_numRecursiveCalls++;
 
@@ -118,7 +150,7 @@ struct RecursionContext {
                     continue;
                 }
                 if (shouldSkipThisVecMKey(lastKeyIndex, i)) {
-                    continue;
+                    goto skip_this_v;;
                 }
 
                 const auto& vMap = vecsMprime[j];
@@ -134,9 +166,12 @@ struct RecursionContext {
                     continue;
                 }
 
+                size_t systemSRank = 0;
                 if (!systemForS || !systemForPPrimeQPrime) {
                     systemSForPair = createSystemForS(v, vMap);
                     systemPPrimeQPrimeForPair = createSystemForPPrimeQPrime(d_, v, k);
+
+                    systemSRank = reduceToREFAndGetRank(systemSForPair, d_, true);
                 } else {
                     systemPPrimeQPrimeForPair = systemForPPrimeQPrime.value();
                     systemSForPair = systemForS.value();
@@ -155,11 +190,11 @@ struct RecursionContext {
                     //  An Eigen sparse matrix could also be used to reduce space.
                     appendToSystemForS(systemSForPair, v, vMap);
 
-                    const size_t rank = reduceToREFAndGetRank(systemSForPair, d_, true);
+                    systemSRank = reduceToREFAndGetRank(systemSForPair, d_, true);
 
                     // Since S is vectorised, the rank should be the number of entries in S, i.e.
                     // it's a (2n) x (2n) symplectic matrix
-                    if (rank == (2 * n_) * (2 * n_)) {
+                    if (systemSRank == (2 * n_) * (2 * n_)) {
                         // Found vectors that can determine S; do not look at other keys for the
                         // rest of the recursive calls.
                         // Now we just have to find the right mapping.
@@ -179,7 +214,17 @@ struct RecursionContext {
                         }
                         continue;
                     }
-                    if (rank > 2 * n_ * 2 * n_ || isSystemInconsistent(systemSForPair)) {
+                    if (systemSRank == lastSystemSRank) {
+                        // System rank not changing means what we just added was just a multiple
+                        // of some other row
+                        if (searchForLinearDependentVector(v)) {
+                            // Leave this out for the rest of the iterations.
+                            disallowedKeys_[lastKeyIndex].insert(i);
+                            continue;
+                        }
+                    }
+
+                    if (systemSRank > 2 * n_ * 2 * n_ || isSystemInconsistent(systemSForPair)) {
                         continue;
                     }
 
@@ -198,14 +243,13 @@ struct RecursionContext {
                 // Push history like a stack so that recursive calls are aware of exactly which
                 // vectors we have mapped already. As S is a permutation, a one-to-one
                 // correspondence is necessary.
-                // Note the [] operator will create a map/set if not present yet.
                 history_[lastKeyIndex][i] = j;
                 // Now that we have a mapping of vecM[i] to vecMprime[j], the recursion below will
                 // advance the index i to examine another vector in vecM. This is the main step of
                 // moving down through the bins.
                 const auto mappingResult = findSymplecticMatrixRecurse(
                     lastKeyIndex, std::make_optional(systemSForPair),
-                    std::make_optional(systemPPrimeQPrimeForPair), std::move(thisSelectedMprime));
+                    std::make_optional(systemPPrimeQPrimeForPair), std::move(thisSelectedMprime), systemSRank);
                 if (mappingResult) {
                     // If we're here, then this mapping is a success
                     return mappingResult;
@@ -225,11 +269,13 @@ struct RecursionContext {
                     throw std::runtime_error("unexpected bad history state");
                 }
             }
+
+            skip_this_v:
         }
 
         return findSymplecticMatrixRecurse(
             /* Advance the key index; unable to find in current bin */ lastKeyIndex + 1,
-            std::move(systemForS), std::move(systemForPPrimeQPrime));
+            std::move(systemForS), std::move(systemForPPrimeQPrime), {}, lastSystemSRank);
     }
 };
 

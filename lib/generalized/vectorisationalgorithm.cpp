@@ -14,7 +14,7 @@ using CliffPermutationSysMatrix = Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dyn
 using PPrimeQPrimeSysMatrix = Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>;
 
 using MappingHistory = std::unordered_map<size_t, std::unordered_map<size_t, size_t>>;
-using VecMIndicesSetByKey = std::unordered_map<size_t, std::unordered_set<size_t>>;
+using VecIndicesSetByKey = std::unordered_map<size_t, std::unordered_set<size_t>>;
 
 static size_t s_numRecursiveCalls = 0;
 
@@ -33,20 +33,28 @@ struct RecursionContext {
 
     /**
      * Modifiable and read across all recursive calls.
-     * Stores the maximum (bin) index that we're allowed to look at.
-     * The index is for sortedKeys.
+     * Stores the maximum (bin) index for sortedKeys_ that we're allowed to look at.
      */
     size_t maxKeyIndex_ = Mmap_.size() - 1;
     /**
      * Modifiable and read across all recursive calls
-     * Stores the keys in Mmap_ that we are allowed to look at. The idea behind this is that
+     * Corresponds to the keys in Mmap_ that we are allowed to look at. The idea behind this is that
      * once the system for S is consistent with one unique solution, there's no need to look at
      * other vectors in MNap.
      */
-    VecMIndicesSetByKey allowedKeys_;
-
-    VecMIndicesSetByKey disallowedKeys_;
-
+    VecIndicesSetByKey allowedKeys_;
+    /**
+     * Modifiable and read across all recursive calls
+     * Stores the keys in Mmap_ that correspond to a vector in Mmap_ that's linearly dependent to
+     * some other vector in Mmap_. The idea is that we shouldn't try to include this in the system,
+     * since it'll add no new information.
+     */
+    VecIndicesSetByKey linearlyDependentKeys_;
+    /**
+     * Modifiable and read across all recursive calls
+     * Contains the current path. This is managed in a stack-like fashion where the history is
+     * appended before doing a recursive call, and history is popped after a recursive call.
+     */
     MappingHistory history_;
 
     [[nodiscard]] std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>>
@@ -55,7 +63,6 @@ struct RecursionContext {
     }
 
   private:
-
     bool areConstantMultiples(const MatrixCoordinate& v1, const MatrixCoordinate& v2) const {
         // Find the first non-zero element in v2 modulo d
         Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> M(v1.rows(), 2);
@@ -64,12 +71,13 @@ struct RecursionContext {
         return reduceToREFAndGetRank(M, d_, false) == 2;
     }
 
-    bool searchForLinearDependentVector(const MatrixCoordinate& v1) {
+    bool isHistoryContainingLinearlyDependentVector(const MatrixCoordinate& v1) {
         for (const auto& [index, mapForIndex] : history_) {
             const auto& key = sortedKeys_[index];
             const auto& vecsM = Mmap_.get(key);
             for (const auto& vInd : mapForIndex | std::views::keys) {
                 const MatrixCoordinate& v2 = vecsM[vInd];
+                assert(v1 != v2 && "vector we're trying to search shouldn't in history");
                 if (areConstantMultiples(v1, v2)) {
                     return true;
                 }
@@ -98,29 +106,43 @@ struct RecursionContext {
             }
         }
         // This will be nonempty if we find linearly dependent vectors
-        if (!disallowedKeys_.empty()) {
-            if (disallowedKeys_[lastKeyIndex].contains(i)) {
+        if (!linearlyDependentKeys_.empty()) {
+            if (linearlyDependentKeys_[lastKeyIndex].contains(i)) {
                 return true;
             }
         }
         return false;
     }
 
+    /**
+     * Recursively finds a symplectic matrix S that satisfies Lemma 10. This is a backtracking
+     * backed algorithm.
+     *
+     * @param sortedMapKeyIndex The index in sortedKeys_ to use
+     * @param systemForS The running system [X^T tensor I]vec(S) = vec(Y) to construct S based on
+     * vectorisation, where SX = Y.
+     * @param systemForPPrimeQPrime The running system of equations to construct the vectors p' and
+     * q'
+     * @param selectedVecMprimeIndices The indices in vecMprime that already have a mapping
+     * @param lastSystemSRank The rank of systemForPPrimeQPrime from the last iteration.
+     * @return Whether a symplectic matrix was found or not.
+     */
     std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> findSymplecticMatrixRecurse(
-        const size_t lastKeyIndex = 0,
+        const size_t sortedMapKeyIndex = 0,
         std::optional<CliffPermutationSysMatrix>&& systemForS = std::nullopt,
         std::optional<PPrimeQPrimeSysMatrix>&& systemForPPrimeQPrime = std::nullopt,
         const std::unordered_set<size_t>&& selectedVecMprimeIndices = {},
         const size_t lastSystemSRank = 0) {
+        assert(lastSystemSRank < (2 * n_) * (2 * n_) && "should never recurse on a full-rank sys");
 
         s_numRecursiveCalls++;
 
-        if (lastKeyIndex > maxKeyIndex_ || lastKeyIndex >= sortedKeys_.size()) {
+        if (sortedMapKeyIndex > maxKeyIndex_ || sortedMapKeyIndex >= sortedKeys_.size()) {
             // RECURSION END: There are no more points to check.
             return std::nullopt;
         }
 
-        const auto& key = sortedKeys_[lastKeyIndex];
+        const auto& key = sortedKeys_[sortedMapKeyIndex];
         const auto& vecsM = Mmap_.get(key);
         const auto& vecsMprime = Mprimemap_.get(key);
         if (vecsM.size() != vecsMprime.size()) {
@@ -134,10 +156,10 @@ struct RecursionContext {
         // If a mapping is plausible (i.e. the systems are consistent), a recursive call is made
         // try to map the other vectors.
         for (size_t i = 0; i < vecsM.size(); ++i) {
-            if (history_[lastKeyIndex].contains(i)) {
+            if (history_[sortedMapKeyIndex].contains(i)) {
                 continue;
             }
-            if (shouldSkipThisVecMKey(lastKeyIndex, i)) {
+            if (shouldSkipThisVecMKey(sortedMapKeyIndex, i)) {
                 continue;
             }
 
@@ -149,8 +171,9 @@ struct RecursionContext {
                 if (selectedVecMprimeIndices.contains(j)) {
                     continue;
                 }
-                if (shouldSkipThisVecMKey(lastKeyIndex, i)) {
-                    goto skip_this_v;;
+                if (shouldSkipThisVecMKey(sortedMapKeyIndex, i)) {
+                    goto skip_this_v;
+                    ;
                 }
 
                 const auto& vMap = vecsMprime[j];
@@ -161,7 +184,7 @@ struct RecursionContext {
                 const auto alpha = M_p_.get(v);
                 const auto beta = Mprime_p_.get(vMap);
                 const double kTest = checkPhase(d_, alpha, beta);
-                const size_t k = std::round(kTest);
+                const size_t k = std::llround(kTest);
                 if (std::abs(kTest - k) > 1e-5) {
                     continue;
                 }
@@ -198,8 +221,8 @@ struct RecursionContext {
                         // Found vectors that can determine S; do not look at other keys for the
                         // rest of the recursive calls.
                         // Now we just have to find the right mapping.
-                        maxKeyIndex_ = lastKeyIndex;
-                        useHistoryToFillAllowedKeysIfNeeded(lastKeyIndex, i);
+                        maxKeyIndex_ = sortedMapKeyIndex;
+                        useHistoryToFillAllowedKeysIfNeeded(sortedMapKeyIndex, i);
                         Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> S =
                             recoverSFromSystem(systemSForPair, n_);
 
@@ -217,9 +240,9 @@ struct RecursionContext {
                     if (systemSRank == lastSystemSRank) {
                         // System rank not changing means what we just added was just a multiple
                         // of some other row
-                        if (searchForLinearDependentVector(v)) {
+                        if (isHistoryContainingLinearlyDependentVector(v)) {
                             // Leave this out for the rest of the iterations.
-                            disallowedKeys_[lastKeyIndex].insert(i);
+                            linearlyDependentKeys_[sortedMapKeyIndex].insert(i);
                             continue;
                         }
                     }
@@ -233,9 +256,14 @@ struct RecursionContext {
                     trimZeroRowsFromBottom(systemPPrimeQPrimeForPair);
                     // The recursion below will advance the index i
                 }
-                // At this point, we are trying to see if there is the desired symplectic
-                // transformation S that maps v to vMap.
+                // At this point, the attempted mapping resulted in systemSForPair being consistent
+                // but with more than one unique solution.
+                //
+                // With this mapping of vecM[i] to vecMprime[j], the recursion below will
+                // advance the index i to map more vectors in vecM. This is the main step of
+                // moving down through the bins.
 
+                // Need to tell the recursion which indices to work on.
                 // Create a separate set to maintain amortized O(1) checks
                 std::unordered_set<size_t> thisSelectedMprime = selectedVecMprimeIndices;
                 thisSelectedMprime.insert(j);
@@ -243,13 +271,11 @@ struct RecursionContext {
                 // Push history like a stack so that recursive calls are aware of exactly which
                 // vectors we have mapped already. As S is a permutation, a one-to-one
                 // correspondence is necessary.
-                history_[lastKeyIndex][i] = j;
-                // Now that we have a mapping of vecM[i] to vecMprime[j], the recursion below will
-                // advance the index i to examine another vector in vecM. This is the main step of
-                // moving down through the bins.
+                history_[sortedMapKeyIndex][i] = j;
                 const auto mappingResult = findSymplecticMatrixRecurse(
-                    lastKeyIndex, std::make_optional(systemSForPair),
-                    std::make_optional(systemPPrimeQPrimeForPair), std::move(thisSelectedMprime), systemSRank);
+                    sortedMapKeyIndex, std::make_optional(systemSForPair),
+                    std::make_optional(systemPPrimeQPrimeForPair), std::move(thisSelectedMprime),
+                    systemSRank);
                 if (mappingResult) {
                     // If we're here, then this mapping is a success
                     return mappingResult;
@@ -264,17 +290,17 @@ struct RecursionContext {
                 // We'll also discard the system for this mapping and recopy the previous system
                 // from the start of the recursive call. Again, if the loop advances, it means
                 // another possible mapping is being tried.
-                if (const size_t countRemoved = history_[lastKeyIndex].erase(i);
+                if (const size_t countRemoved = history_[sortedMapKeyIndex].erase(i);
                     countRemoved != 1) {
                     throw std::runtime_error("unexpected bad history state");
                 }
             }
 
-            skip_this_v:
+        skip_this_v:
         }
 
         return findSymplecticMatrixRecurse(
-            /* Advance the key index; unable to find in current bin */ lastKeyIndex + 1,
+            /* Advance the key index; unable to find in current bin */ sortedMapKeyIndex + 1,
             std::move(systemForS), std::move(systemForPPrimeQPrime), {}, lastSystemSRank);
     }
 };

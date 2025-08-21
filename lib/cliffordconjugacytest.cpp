@@ -315,7 +315,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
             const auto& beta = Mprime_p.get(u);
             // Try to find integer k such that alpha_v = omega^k beta_u
             const double kTest = checkPhase(d, alpha, beta);
-            const size_t k = std::round(kTest);
+            const size_t k = std::llround(kTest);
             if (std::abs(kTest - k) > 1e-5) {
                 continue;
             }
@@ -437,7 +437,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
                 // Try to find integer k such that alpha_v = omega^k beta_v
                 const double kTest = checkPhase(d, alphaV, betaV);
-                const double k = std::round(kTest);
+                const size_t k = std::lround(kTest);
                 if (std::abs(kTest - k) > 1e-5) {
                     // too far from an integer
                     continue;
@@ -445,7 +445,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
                 // Try to find integer k' such that alpha'_v = omega^k' beta'_v
                 const double kPrimeTest = checkPhase(d, alphaVPrime, betaVPrime);
-                const double kPrime = std::round(kPrimeTest);
+                const size_t kPrime = std::llround(kPrimeTest);
                 if (std::abs(kPrimeTest - kPrime) > 1e-5) {
                     // too far from an integer
                     continue;

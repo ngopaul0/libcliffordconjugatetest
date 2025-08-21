@@ -135,14 +135,14 @@ symplecticProductMultiQudit(size_t d, const Eigen::Vector<long, Eigen::Dynamic>&
 
     size_t sum = 0;
     for (size_t i = 0; i < n; ++i) {
-        size_t pIndex = 2 * i;
-        size_t qIndex = 2 * i + 1;
+        size_t pIndex = i;
+        size_t qIndex = n + i;
 
-        long p_i = pq_vec[pIndex];
-        long qPrime_i = pPrime_qPrime_vec[qIndex];
+        long p_i = pq_vec(pIndex);
+        long qPrime_i = pPrime_qPrime_vec(qIndex);
 
-        long pPrime_i = pPrime_qPrime_vec[pIndex];
-        long q_i = pq_vec[qIndex];
+        long pPrime_i = pPrime_qPrime_vec(pIndex);
+        long q_i = pq_vec(qIndex);
 
         sum = safeMod(sum + p_i * qPrime_i - pPrime_i * q_i, d);
     }
@@ -229,14 +229,14 @@ std::complex<double> f(const Eigen::Ref<const Eigen::MatrixXcd>& M, int p, int q
  * The W() function together with Eigen::kroneckerProduct can be used to form Pauli basis elements
  *
  * @param M A d x d complex matrix, where d is prime
- * @param pq_vec Pauli basis element coordinates
+ * @param pq_vec Pauli basis element coordinates, stored as [p1, ..., pn, q1, ..., qn]
  * @param d Odd prime d
  * @param inv_2 The modular multiplicative inverse of 2 modulo d.
  * @param omega The complex root of unity (e.g., std::exp(std::complex<double>(0, 2 * M_PI / d))).
  * @return the coefficient of W(p1,q1) ⊗ ... ⊗ W(pn,qn) in the Pauli basis decomposition of M.
  */
 std::complex<double> f_multiqudit(const Eigen::Ref<const Eigen::MatrixXcd>& M,
-                                  const Eigen::Vector<long, Eigen::Dynamic>& pq_vec, size_t d,
+                                  const Eigen::Vector<long, Eigen::Dynamic>& pq_vec, long d,
                                   int inv_2, const std::complex<double>& omega);
 
 /**

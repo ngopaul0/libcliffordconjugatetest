@@ -437,8 +437,6 @@ TEST_CASE("findSymplecticMatrix", "[vectorisationalgorithm][findSymplecticMatrix
 }
 
 TEST_CASE("createSystemForPPrimeQPrime", "[generalized]") {
-
-
     SECTION("Creates system correctly") {
         const size_t d = 5;
         for (const auto& pq_vec : TupleIterator<SingleModulus>(d, 4)) {
@@ -450,7 +448,8 @@ TEST_CASE("createSystemForPPrimeQPrime", "[generalized]") {
 
             Eigen::RowVector<long, 5> system = createSystemForPPrimeQPrime(d, pq_vec, k);
             Eigen::RowVector<long, 5> expectedSystem =
-                {safeMod(-pq_vec(1), d), pq_vec(0), safeMod(-pq_vec(3), d), pq_vec(2), k};
+                {-pq_vec(2), -pq_vec(3), pq_vec(0), pq_vec(1), k};
+            expectedSystem = modMatrix(expectedSystem, d);
             REQUIRE(expectedSystem == system);
         }
     }
@@ -464,7 +463,7 @@ TEST_CASE("createSystemForPPrimeQPrime", "[generalized]") {
 
         Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> system =
             createSystemForPPrimeQPrime(d, pq_vec, k);
-        Eigen::RowVector<long, 5> expectedSystem = {safeMod(-pq_vec(1), d), pq_vec(0), safeMod(-pq_vec(3), d), pq_vec(2), k};
+        Eigen::RowVector<long, 5> expectedSystem = {safeMod(-pq_vec(2), d), safeMod(-pq_vec(3), d), safeMod(pq_vec(0), d), pq_vec(1), k};
         REQUIRE(expectedSystem == system);
         REQUIRE(expectedSystem == system.row(0));
 
@@ -474,7 +473,7 @@ TEST_CASE("createSystemForPPrimeQPrime", "[generalized]") {
         appendToSystemForPPrimeQPrime(system, d, pq_vec, k2);
         CHECK(system.rows() == 2);
         Eigen::RowVector<long, 5> expectedSystem2ndRow =
-           {safeMod(-pq_vec_2(1), d), pq_vec_2(0), safeMod(-pq_vec_2(3), d), pq_vec_2(2), k2};;
+           {safeMod(-pq_vec_2(2), d), safeMod(-pq_vec_2(3), d), safeMod(pq_vec_2(0), d), pq_vec_2(1), k2};;
         CHECK(expectedSystem == system.row(0));
         CHECK(expectedSystem2ndRow == system.row(1));
     }

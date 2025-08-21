@@ -506,7 +506,7 @@ bool isCliffordConjugateGeneralized(const std::size_t d, const std::size_t n,
     const auto inv2 = modInverse(2, d);
     const auto omega = std::exp(std::complex<double>(0, 2 * pi / d));
 
-    FMap MMap(d, n, 1e-5, 1e-5);
+    FMap MMap(d, n, mapAbsValPrecision, mapXPrecision);
     MpMatrixType M_p(2 * n, d);
     for (auto tuple : M_p.indexIterator()) {
         const auto val = f_multiqudit(M, tuple, d, inv2, omega);
@@ -514,7 +514,7 @@ bool isCliffordConjugateGeneralized(const std::size_t d, const std::size_t n,
         MMap.insertEntryNTuple(std::move(tuple), val);
     }
 
-    FMap MprimeMap(d, n, 1e-5, 1e-5);
+    FMap MprimeMap(d, n, mapAbsValPrecision, mapXPrecision);
     MpMatrixType Mprime_p(2 * n, d);
     for (auto tuple : Mprime_p.indexIterator()) {
         const auto val = f_multiqudit(M_prime, tuple, d, inv2, omega);

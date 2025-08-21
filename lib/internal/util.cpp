@@ -96,14 +96,14 @@ std::complex<double> f(const Eigen::Ref<const Eigen::MatrixXcd>& M, int p, int q
 }
 
 std::complex<double> f_multiqudit(const Eigen::Ref<const Eigen::MatrixXcd>& M,
-                                  const Eigen::Vector<long, Eigen::Dynamic>& pq_vec, size_t d,
+                                  const Eigen::Vector<long, Eigen::Dynamic>& pq_vec, const long d,
                                   int inv_2, const std::complex<double>& omega) {
     if (M.rows() != M.cols()) {
         throw std::invalid_argument("M is not squre");
     }
     assert(pq_vec.size() % 2 == 0);
 
-    const size_t numQudits = pq_vec.size() / 2;
+    const long numQudits = pq_vec.size() / 2;
     if (numQudits == 0) {
         throw std::invalid_argument("empty or single-element pq_vec");
     }
@@ -119,9 +119,9 @@ std::complex<double> f_multiqudit(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
     // Calculate the outer omega term: omega^(-2^(-1) * sum(p_k*q_k))
     int totalOuterExponent = 0;
-    for (size_t i = 0; i < numQudits; i++) {
-        const size_t pIndex = 2 * i ;
-        const size_t qIndex = 2 * i + 1;
+    for (long i = 0; i < numQudits; i++) {
+        const long pIndex = i;
+        const long qIndex = numQudits + i;
         totalOuterExponent += safeMod(-inv_2 * pq_vec(pIndex) * pq_vec(qIndex), d);
     }
     std::complex<double> omegaOuter = std::pow(omega, safeMod(totalOuterExponent, d));
@@ -130,21 +130,23 @@ std::complex<double> f_multiqudit(const Eigen::Ref<const Eigen::MatrixXcd>& M,
     // This could be made clearer by using a TupleIterator
     std::complex sumTemp = 0.0;
 
-    for (size_t i = 0; i < totalDim; i++) {
-        int totalInnerExponent = 0;
-        size_t matrixIndex_j = 0;
-        size_t currentBase = 1;
-        size_t temp_i = i;
+    for (long i = 0; i < totalDim; i++) {
+        long totalInnerExponent = 0;
+        long matrixIndex_j = 0;
+        long currentBase = 1;
+        long temp_i = i;
 
         // Convert the single integer index 'i' to a tuple of base-d indices
         // and calculate the new index 'j' and the inner omega exponent.
         for (size_t k = 0; k < numQudits; k++) {
-            const size_t i_k = temp_i % d;
+            const long i_k = temp_i % d;
 
-            const size_t pqIndex = numQudits - k - 1;
+            const long pqIndex = numQudits - k - 1;
             // Go through list backwards
-            const size_t p_k = pq_vec(2 * pqIndex);
-            const size_t q_k = pq_vec(2 * pqIndex + 1);
+            const long pIndex = pqIndex;
+            const long qIndex = numQudits + pqIndex;
+            const long p_k = pq_vec(pIndex);
+            const long q_k = pq_vec(qIndex);
 
             // Calculate the total inner exponent
             totalInnerExponent += safeMod(-i_k * p_k, d);

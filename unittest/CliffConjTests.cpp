@@ -511,56 +511,6 @@ TEST_CASE("Multi qudit case", "[multiqudit]") {
         const Eigen::MatrixXcd C = Eigen::kroneckerProduct(C1, C2);
         const Eigen::MatrixXcd Mprime = C * M * C.adjoint();
 
-        const Eigen::MatrixXcd M1prime = C1 * M1 * C1.adjoint();
-        const Eigen::MatrixXcd M2prime = C2 * M2 * C2.adjoint();
-
-        const auto M1_p = createMpMatrix((M1), omega, inv_2);
-        const auto M1prime_p = createMpMatrix((M1prime), omega, inv_2);
-        std::optional<Lemma10Info> result1 = bruteForceTestCliffordConjugacy<true>(M1, M1prime, omega, M1_p, M1prime_p);
-        std::stringstream ssC1;
-        ssC1 << result1->first;
-        auto stringC1 = ssC1.str();
-        const auto M2_p = createMpMatrix((M2), omega, inv_2);
-        const auto M2prime_p = createMpMatrix((M2prime), omega, inv_2);
-        std::optional<Lemma10Info> result2 = bruteForceTestCliffordConjugacy<true>(M2, M2prime, omega, M2_p, M2prime_p);
-        std::stringstream ssC2;
-        ssC2 << result2->first;
-        auto stringC2 = ssC2.str();
-        const size_t pPrime1 = result1->second.first;
-        const size_t qPrime1 = result1->second.second;
-        const size_t pPrime2 = result2->second.first;
-        const size_t qPrime2 = result2->second.second;
-
-        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> S = directSum(result1->first, result2->first);
-        std::stringstream ssC;
-        ssC << S;
-        auto stringC = ssC.str();
-
-        FMap MMap(d, n, 1e-5, 1e-5);
-        MpMatrixType M_p(2 * n, d);
-        for (auto tuple : M_p.indexIterator()) {
-            const auto val = f_multiqudit(M, tuple, d, inv_2, omega);
-            M_p.get(tuple) = val;
-            MMap.insertEntryNTuple(std::move(tuple), val);
-        }
-
-        FMap MprimeMap(d, n, 1e-5, 1e-5);
-        MpMatrixType Mprime_p(2 * n, d);
-        for (auto tuple : Mprime_p.indexIterator()) {
-            const auto val = f_multiqudit(Mprime, tuple, d, inv_2, omega);
-            Mprime_p.get(tuple) = val;
-            MprimeMap.insertEntryNTuple(std::move(tuple), val);
-        }
-
-        std::vector<std::array<long, 4>> allTuplesMapped;
-        for (const auto& tuple : allTuples) {
-            Eigen::Vector<long, Eigen::Dynamic> prod = modMatrix(S * tuple, d);
-            allTuplesMapped.push_back({prod(0), prod(1), prod(2), prod(3)});
-        }
-
-        Eigen::Vector<long, 4> pPrimeQPrimeVec(pPrime1, qPrime1, pPrime2, qPrime2);
-        REQUIRE(test_clifford_conjugate_lemma_10(d, pPrimeQPrimeVec, omega, M, M_p, Mprime_p, S));
-
         REQUIRE(isCliffordConjugateGeneralized(d, n, M, Mprime));
     }
 

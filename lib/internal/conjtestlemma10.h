@@ -13,8 +13,7 @@ namespace cliffconjtest {
  * Checks whether f_M(p,q) = omega^[p, q, pPrime, qPrime) * f_{M'}(S(p,q)) from Lemma 10 by looping
  * through all p,q
  *
- * @param pPrime_qPrime_vec pPrime, qPrimes to verify, where (p_1', q_1', p_2', q_2', ..., p_n',
- * q_n')
+ * @param pPrime_qPrime_vec pPrime, qPrimes to verify, where (p_1', ..., p_n', q_1', ..., q_n')
  * @param omega dth root of unity
  * @param M The dxd matrix M, where d is an odd prime
  * @param M_p Precomputed values for f_{M}(p,q)
@@ -51,9 +50,6 @@ inline bool test_clifford_conjugate_lemma_10(
             std::pow(omega, symplecticProductMultiQudit(d, v, pPrime_qPrime_vec));
 
         if (!isApproxEqual(fM, omegaTerm * fMPrime)) {
-            std::stringstream ss;
-            ss << v;
-            auto s = ss.str();
             return false;
         }
     }

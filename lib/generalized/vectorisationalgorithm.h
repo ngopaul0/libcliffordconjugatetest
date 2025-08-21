@@ -82,8 +82,7 @@ void appendToSystemForS(MatrixType& existingRREFSystem, const VectorType& v,
 }
 
 /**
- * From known pq_vecs = (p1, q1, p2, q2, ..., pn, qn)
- * and unknown pPrime_qPrime_vec = (p_1', q_1', ..., p_n', q_n'),
+ * From known pq_vecs = (p_1, ..., p_n, q_1, ..., q_n) and unknown pPrime_qPrime_vec = (p_1',...,p_n',q_1',...,q_n'),
  * computes a system of equations of the form
  *
  *     symplecticProduct(pq_vec, pPrime_qPrime_vec) = k.
@@ -100,9 +99,10 @@ void appendToSystemForS(MatrixType& existingRREFSystem, const VectorType& v,
  * one equation), one row of the system would be
  * \code
  *                                                |p_1'|
- *                                                |q_1'|
- *      [-q_1  p_1  -q_2  p_2  ...  -q_n  p_n] *  |... | = k
+ *                                                |... |
  *                                                |p_n'|
+ *            [-q_1  ...  -q_n  p_1  ...  p_n] *  |q_1'| = k
+ *                                                |... |
  *                                                |q_n'|
  * \endcode
  * @tparam VectorType
@@ -115,10 +115,11 @@ template <typename VectorType>
 auto createSystemForPPrimeQPrime(const size_t d, const VectorType& pq_vec, const size_t k) {
     using Scalar = typename VectorType::Scalar;
     const size_t twoTimes_n = pq_vec.rows();
+    const long n = twoTimes_n / 2;;
     Eigen::RowVector<Scalar, Eigen::Dynamic> row(pq_vec.rows() + 1);
-    for (size_t i = 0; i < twoTimes_n / 2; i++) {
-        size_t pIndex = 2 * i;
-        size_t qIndex = 2 * i + 1;
+    for (size_t i = 0; i < n; i++) {
+        size_t pIndex = i;
+        size_t qIndex = n + i;
         long p_i = pq_vec[pIndex];
         long q_i = pq_vec[qIndex];
 
@@ -197,24 +198,6 @@ bool isSystemInconsistent(const MatrixType& matrixRREF) {
         }
     }
     return false;
-}
-
-/**
- * @return The direct sum of A and B: [A, 0; 0, B]
- */
-template <typename DerivedA, typename DerivedB>
-auto directSum(const Eigen::MatrixBase<DerivedA>& A, const Eigen::MatrixBase<DerivedB>& B) {
-    long n_rows = A.rows();
-    long n_cols = A.cols();
-    long m_rows = B.rows();
-    long m_cols = B.cols();
-
-    Eigen::Matrix<typename DerivedA::Scalar, Eigen::Dynamic, Eigen::Dynamic> C(n_rows + m_rows,
-                                                                               n_cols + m_cols);
-    C.setZero();
-    C.topLeftCorner(n_rows, n_cols) = A;
-    C.bottomRightCorner(m_rows, m_cols) = B;
-    return C;
 }
 
 /**
@@ -302,10 +285,7 @@ inline bool isSymplectic(const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynami
     if (n == 1) {
         return safeMod(S(0, 0) * S(1, 1) - S(0, 1) * S(1, 0), d) == 1;
     }
-    // TODO: Figure out the symplectic form for tensor product matrices?
-    return checkIfBlockDiagonalAndEachBlockSymplectic(S, d);
 
-    /*
     // Construct the standard symplectic matrix, J
     Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> J =
         Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>::Zero(2 * n, 2 * n);
@@ -329,7 +309,6 @@ inline bool isSymplectic(const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynami
     auto lhsString = sssLhs.str();
 #endif
     return lhs == J;
-    */
 }
 
 size_t returnLastNumRecursiveCalls();

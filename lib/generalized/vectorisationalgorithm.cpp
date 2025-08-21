@@ -297,347 +297,118 @@ struct RecursionContext {
                 continue;
             }
 
-
-
             const auto& v = vecsM[i];
             // Test the validity of a symplectic matrix mapping v to vMap.
             // If this inner loop continues, that means that particular mapping failed, and the
             // next iteration is looking at another mapping possibility.
-            if (vecsMprime.size() > 30 && sortedMapKeyIndex == maxKeyIndex_) {
-                std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> Sresult;
-                bool foundS = false;
-
-                std::vector<size_t> vecMprimeIndicesToRecurseOn;
-                // Use a private vector for each thread to avoid a critical section on every push_back
-                // and then merge them at the end. This is often more efficient.
-                const bool isCheckOnBefore = !allowedKeys_.empty();
-
-                std::atomic_bool written;
-#pragma omp parallel
-                {
-                    std::vector<size_t> private_vecMprimeIndicesToRecurseOn;
-
-
-#pragma omp for
-                    for (size_t j = 0; j < vecsMprime.size(); ++j) {
-#pragma omp cancellation point for
-                        if (foundS) {
-                            continue;
-                        }
-                        if (!unmappedVecIndicesStack_.isIndexAllowedVecMprime(j)) {
-                            continue;
-                        }
-
-                        if (isCheckOnBefore || written) {
-                            if (shouldSkipThisVecMKey(sortedMapKeyIndex, i)) {
-                                continue;
-                            }
-                        } else {
-                            if (!allowedKeys_.empty()) {
-                                bool shouldSkip = false;
-#pragma omp critical
-                                {
-                                    if (shouldSkipThisVecMKey(sortedMapKeyIndex, i)) {
-                                        shouldSkip = true;
-                                    }
-                                }
-                                if (shouldSkip) {
-                                    continue;
-                                }
-                            }
-                        }
-
-                        const auto& vMap = vecsMprime[j];
-                        // Will create a copy of the system
-                        CliffPermutationSysMatrix systemSForPair;
-                        PPrimeQPrimeSysMatrix systemPPrimeQPrimeForPair;
-
-                        const auto alpha = M_p_.get(v);
-                        const auto beta = Mprime_p_.get(vMap);
-                        const double kTest = checkPhase(d_, alpha, beta);
-                        const size_t k = std::llround(kTest);
-                        if (std::abs(kTest - k) > 1e-5) {
-                            continue;
-                        }
-
-                        size_t systemSRank = 0;
-                        if (!systemForS || !systemForPPrimeQPrime) {
-                            systemSForPair = createSystemForS(v, vMap);
-                            systemPPrimeQPrimeForPair = createSystemForPPrimeQPrime(d_, v, k);
-
-                            systemSRank = reduceToREFAndGetRank(systemSForPair, d_, true);
-                        } else {
-                            systemPPrimeQPrimeForPair = systemForPPrimeQPrime.value();
-                            systemSForPair = systemForS.value();
-
-                            appendToSystemForPPrimeQPrime(systemPPrimeQPrimeForPair, d_, v, k);
-
-                            // TODO: Optimize this to only reduce the bottom row
-                            const size_t rankPQSystem =
-                                reduceToREFAndGetRank(systemPPrimeQPrimeForPair, d_, true);
-
-                            if (rankPQSystem > 2 * n_ || isSystemInconsistent(systemPPrimeQPrimeForPair)) {
-                                continue;
-                            }
-
-                            // TODO: Optimize this to only reduce the bottom row
-                            //  An Eigen sparse matrix could also be used to reduce space.
-                            appendToSystemForS(systemSForPair, v, vMap);
-
-                            systemSRank = reduceToREFAndGetRank(systemSForPair, d_, true);
-
-     #pragma omp cancellation point for
-                            // Since S is vectorised, the rank should be the number of entries in S, i.e.
-                            // it's a (2n) x (2n) symplectic matrix
-                            if (systemSRank == (2 * n_) * (2 * n_)) {
-                                // Found vectors that can determine S; do not look at other keys for the
-                                // rest of the recursive calls.
-                                // Now we just have to find the right mapping.
-                                if (!isCheckOnBefore && !written) {
-                                    if (allowedKeys_.empty()) {
-
-#pragma omp critical
-                                        {
-                                            maxKeyIndex_ = sortedMapKeyIndex;
-                                            useHistoryToFillAllowedKeysIfNeeded(sortedMapKeyIndex, i);
-                                        }
-                                        written = true;
-                                    }
-
-                                }
-                                Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> S =
-                                    recoverSFromSystem(systemSForPair, n_);
-
-                                if (rankPQSystem == 2 * n_ && isSymplectic(S, d_)) {
-                                    const auto pPrime_qPrime_Vec =
-                                        recoverPPrimeQPrimeVecFromSystem(systemPPrimeQPrimeForPair, n_);
-                                    if (test_clifford_conjugate_lemma_10(d_, pPrime_qPrime_Vec, omega_, M_,
-                                                                         M_p_, Mprime_p_, S)) {
-#pragma omp critical
-                                        {
-                                            // RECURSION END: We have found a valid S that satisfies Lemma 10.
-                                            Sresult = std::make_optional(S);
-                                            foundS = true;
-                                        }
-#pragma omp cancel for
-                                                                         }
-                                }
-                                continue;
-                            }
-                            if (systemSRank == lastSystemSRank) {
-                                // System rank not changing means what we just added was just a multiple
-                                // of some other row
-                                if (isHistoryContainingLinearlyDependentVector(v)) {
-                                    // Leave this out for the rest of the iterations.
-#pragma omp critical
-                                    {
-                                        linearlyDependentKeys_[sortedMapKeyIndex].insert(i);
-                                    }
-                                    continue;
-                                }
-                            }
-
-                            if (systemSRank > 2 * n_ * 2 * n_ || isSystemInconsistent(systemSForPair)) {
-                                continue;
-                            }
-
-                            // Good systems; use them for the next iteration
-
-                            // The recursion below will advance the index i
-                        }
-                        // At this point, the attempted mapping resulted in systemSForPair being consistent
-                        // but with more than one unique solution.
-                        //
-                        // With this mapping of vecM[i] to vecMprime[j], the recursion below will
-                        // advance the index i to map more vectors in vecM. This is the main step of
-                        // moving down through the bins.
-                        private_vecMprimeIndicesToRecurseOn.push_back(j);
-                    }
-
-#pragma omp critical
-                    {
-                        for (const auto& vPrimeInd : private_vecMprimeIndicesToRecurseOn) {
-                            vecMprimeIndicesToRecurseOn.push_back(vPrimeInd);
-                        }
-                        // Merge the private vectors into the main one
-                        //vecMprimeIndicesToRecurseOn.insert(vecMprimeIndicesToRecurseOn.end(),
-                        //                                   private_vecMprimeIndicesToRecurseOn.begin(),
-                        //                                   private_vecMprimeIndicesToRecurseOn.end());
-                    }
+            for (size_t j = 0; j < vecsMprime.size(); ++j) {
+                if (!unmappedVecIndicesStack_.isIndexAllowedVecMprime(j)) {
+                    continue;
+                }
+                if (shouldSkipThisVecMKey(sortedMapKeyIndex, i)) {
+                    goto skip_this_v;
                 }
 
-                if (Sresult) {
-                    return Sresult;
+                const auto& vMap = vecsMprime[j];
+                // Will create a copy of the system
+                CliffPermutationSysMatrix systemSForPair;
+                PPrimeQPrimeSysMatrix systemPPrimeQPrimeForPair;
+
+                const auto alpha = M_p_.get(v);
+                const auto beta = Mprime_p_.get(vMap);
+                const double kTest = checkPhase(d_, alpha, beta);
+                const size_t k = std::llround(kTest);
+                if (std::abs(kTest - k) > 1e-5) {
+                    continue;
                 }
 
-                for (const auto& j : vecMprimeIndicesToRecurseOn) {
-                    const auto& vMap = vecsMprime[j];
-                    // Will create a copy of the system
-                    CliffPermutationSysMatrix systemSForPair;
-                    PPrimeQPrimeSysMatrix systemPPrimeQPrimeForPair;
+                size_t systemSRank = 0;
+                if (!systemForS || !systemForPPrimeQPrime) {
+                    systemSForPair = createSystemForS(v, vMap);
+                    systemPPrimeQPrimeForPair = createSystemForPPrimeQPrime(d_, v, k);
 
-                    const auto alpha = M_p_.get(v);
-                    const auto beta = Mprime_p_.get(vMap);
-                    const double kTest = checkPhase(d_, alpha, beta);
-                    const size_t k = std::llround(kTest);
-                    if (std::abs(kTest - k) > 1e-5) {
+                    systemSRank = reduceToREFAndGetRank(systemSForPair, d_, true);
+                } else {
+                    systemPPrimeQPrimeForPair = systemForPPrimeQPrime.value();
+                    systemSForPair = systemForS.value();
+
+                    appendToSystemForPPrimeQPrime(systemPPrimeQPrimeForPair, d_, v, k);
+
+                    // TODO: Optimize this to only reduce the bottom row
+                    const size_t rankPQSystem =
+                        reduceToREFAndGetRank(systemPPrimeQPrimeForPair, d_, true);
+
+                    if (rankPQSystem > 2 * n_ || isSystemInconsistent(systemPPrimeQPrimeForPair)) {
                         continue;
                     }
 
-                    size_t systemSRank = 0;
-                    if (!systemForS || !systemForPPrimeQPrime) {
-                        systemSForPair = createSystemForS(v, vMap);
-                        systemPPrimeQPrimeForPair = createSystemForPPrimeQPrime(d_, v, k);
+                    // TODO: Optimize this to only reduce the bottom row
+                    //  An Eigen sparse matrix could also be used to reduce space.
+                    appendToSystemForS(systemSForPair, v, vMap);
 
-                        systemSRank = reduceToREFAndGetRank(systemSForPair, d_, true);
-                    } else {
-                        systemPPrimeQPrimeForPair = systemForPPrimeQPrime.value();
-                        systemSForPair = systemForS.value();
+                    systemSRank = reduceToREFAndGetRank(systemSForPair, d_, true);
 
-                        appendToSystemForPPrimeQPrime(systemPPrimeQPrimeForPair, d_, v, k);
+                    // Since S is vectorised, the rank should be the number of entries in S, i.e.
+                    // it's a (2n) x (2n) symplectic matrix
+                    if (systemSRank == (2 * n_) * (2 * n_)) {
+                        // Found vectors that can determine S; do not look at other keys for the
+                        // rest of the recursive calls.
+                        // Now we just have to find the right mapping.
+                        maxKeyIndex_ = sortedMapKeyIndex;
+                        useHistoryToFillAllowedKeysIfNeeded(sortedMapKeyIndex, i);
+                        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> S =
+                            recoverSFromSystem(systemSForPair, n_);
 
-                        // TODO: Optimize this to only reduce the bottom row
-                        const size_t rankPQSystem =
-                            reduceToREFAndGetRank(systemPPrimeQPrimeForPair, d_, true);
-
-                        if (rankPQSystem > 2 * n_ || isSystemInconsistent(systemPPrimeQPrimeForPair)) {
+                        if (rankPQSystem == 2 * n_ && isSymplectic(S, d_)) {
+                            const auto pPrime_qPrime_Vec =
+                                recoverPPrimeQPrimeVecFromSystem(systemPPrimeQPrimeForPair, n_);
+                            if (test_clifford_conjugate_lemma_10(d_, pPrime_qPrime_Vec, omega_, M_,
+                                                                 M_p_, Mprime_p_, S)) {
+                                // RECURSION END: We have found a valid S that satisfies Lemma 10.
+                                return std::make_optional(S);
+                            }
+                        }
+                        continue;
+                    }
+                    if (systemSRank == lastSystemSRank) {
+                        // System rank not changing means what we just added was just a multiple
+                        // of some other row
+                        if (isHistoryContainingLinearlyDependentVector(v)) {
+                            // Leave this out for the rest of the iterations.
+                            linearlyDependentKeys_[sortedMapKeyIndex].insert(i);
                             continue;
                         }
-
-                        // TODO: Optimize this to only reduce the bottom row
-                        //  An Eigen sparse matrix could also be used to reduce space.
-                        appendToSystemForS(systemSForPair, v, vMap);
-
-                        systemSRank = reduceToREFAndGetRank(systemSForPair, d_, true);
                     }
 
+                    if (systemSRank > 2 * n_ * 2 * n_ || isSystemInconsistent(systemSForPair)) {
+                        continue;
+                    }
+
+                    // Good systems; use them for the next iteration
                     trimZeroRowsFromBottom(systemSForPair);
                     trimZeroRowsFromBottom(systemPPrimeQPrimeForPair);
-
-                    onMappingPlausible(sortedMapKeyIndex, i, j);
-                    const auto mappingResult = findSymplecticMatrixRecurse(
-                        sortedMapKeyIndex, std::make_optional(systemSForPair),
-                        std::make_optional(systemPPrimeQPrimeForPair), systemSRank);
-                    if (mappingResult) {
-                        // If we're here, then this mapping is a success
-                        return mappingResult;
-                    }
-                    // If we're here, then mapping this v from M to vMap from Mprime didn't work, so
-                    // continue the loop and try to map v to another vector from Mprime with the same
-                    // map key.
-                    //
-                    onMappingFailed(sortedMapKeyIndex, i, j);
+                    // The recursion below will advance the index i
                 }
-            } else {
-                for (size_t j = 0; j < vecsMprime.size(); ++j) {
-                    if (!unmappedVecIndicesStack_.isIndexAllowedVecMprime(j)) {
-                        continue;
-                    }
-                    if (shouldSkipThisVecMKey(sortedMapKeyIndex, i)) {
-                        goto skip_this_v;
-                    }
+                // At this point, the attempted mapping resulted in systemSForPair being consistent
+                // but with more than one unique solution.
+                //
+                // With this mapping of vecM[i] to vecMprime[j], the recursion below will
+                // advance the index i to map more vectors in vecM. This is the main step of
+                // moving down through the bins.
 
-                    const auto& vMap = vecsMprime[j];
-                    // Will create a copy of the system
-                    CliffPermutationSysMatrix systemSForPair;
-                    PPrimeQPrimeSysMatrix systemPPrimeQPrimeForPair;
-
-                    const auto alpha = M_p_.get(v);
-                    const auto beta = Mprime_p_.get(vMap);
-                    const double kTest = checkPhase(d_, alpha, beta);
-                    const size_t k = std::llround(kTest);
-                    if (std::abs(kTest - k) > 1e-5) {
-                        continue;
-                    }
-
-                    size_t systemSRank = 0;
-                    if (!systemForS || !systemForPPrimeQPrime) {
-                        systemSForPair = createSystemForS(v, vMap);
-                        systemPPrimeQPrimeForPair = createSystemForPPrimeQPrime(d_, v, k);
-
-                        systemSRank = reduceToREFAndGetRank(systemSForPair, d_, true);
-                    } else {
-                        systemPPrimeQPrimeForPair = systemForPPrimeQPrime.value();
-                        systemSForPair = systemForS.value();
-
-                        appendToSystemForPPrimeQPrime(systemPPrimeQPrimeForPair, d_, v, k);
-
-                        // TODO: Optimize this to only reduce the bottom row
-                        const size_t rankPQSystem =
-                            reduceToREFAndGetRank(systemPPrimeQPrimeForPair, d_, true);
-
-                        if (rankPQSystem > 2 * n_ || isSystemInconsistent(systemPPrimeQPrimeForPair)) {
-                            continue;
-                        }
-
-                        // TODO: Optimize this to only reduce the bottom row
-                        //  An Eigen sparse matrix could also be used to reduce space.
-                        appendToSystemForS(systemSForPair, v, vMap);
-
-                        systemSRank = reduceToREFAndGetRank(systemSForPair, d_, true);
-
-                        // Since S is vectorised, the rank should be the number of entries in S, i.e.
-                        // it's a (2n) x (2n) symplectic matrix
-                        if (systemSRank == (2 * n_) * (2 * n_)) {
-                            // Found vectors that can determine S; do not look at other keys for the
-                            // rest of the recursive calls.
-                            // Now we just have to find the right mapping.
-                            maxKeyIndex_ = sortedMapKeyIndex;
-                            useHistoryToFillAllowedKeysIfNeeded(sortedMapKeyIndex, i);
-                            Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> S =
-                                recoverSFromSystem(systemSForPair, n_);
-
-                            if (rankPQSystem == 2 * n_ && isSymplectic(S, d_)) {
-                                const auto pPrime_qPrime_Vec =
-                                    recoverPPrimeQPrimeVecFromSystem(systemPPrimeQPrimeForPair, n_);
-                                if (test_clifford_conjugate_lemma_10(d_, pPrime_qPrime_Vec, omega_, M_,
-                                                                     M_p_, Mprime_p_, S)) {
-                                    // RECURSION END: We have found a valid S that satisfies Lemma 10.
-                                    return std::make_optional(S);
-                                }
-                            }
-                            continue;
-                        }
-                        if (systemSRank == lastSystemSRank) {
-                            // System rank not changing means what we just added was just a multiple
-                            // of some other row
-                            if (isHistoryContainingLinearlyDependentVector(v)) {
-                                // Leave this out for the rest of the iterations.
-                                linearlyDependentKeys_[sortedMapKeyIndex].insert(i);
-                                continue;
-                            }
-                        }
-
-                        if (systemSRank > 2 * n_ * 2 * n_ || isSystemInconsistent(systemSForPair)) {
-                            continue;
-                        }
-
-                        // Good systems; use them for the next iteration
-                        trimZeroRowsFromBottom(systemSForPair);
-                        trimZeroRowsFromBottom(systemPPrimeQPrimeForPair);
-                        // The recursion below will advance the index i
-                    }
-                    // At this point, the attempted mapping resulted in systemSForPair being consistent
-                    // but with more than one unique solution.
-                    //
-                    // With this mapping of vecM[i] to vecMprime[j], the recursion below will
-                    // advance the index i to map more vectors in vecM. This is the main step of
-                    // moving down through the bins.
-
-                    onMappingPlausible(sortedMapKeyIndex, i, j);
-                    const auto mappingResult = findSymplecticMatrixRecurse(
-                        sortedMapKeyIndex, std::make_optional(systemSForPair),
-                        std::make_optional(systemPPrimeQPrimeForPair), systemSRank);
-                    if (mappingResult) {
-                        // If we're here, then this mapping is a success
-                        return mappingResult;
-                    }
-                    // If we're here, then mapping this v from M to vMap from Mprime didn't work, so
-                    // continue the loop and try to map v to another vector from Mprime with the same
-                    // map key.
-                    //
-                    onMappingFailed(sortedMapKeyIndex, i, j);
+                onMappingPlausible(sortedMapKeyIndex, i, j);
+                const auto mappingResult = findSymplecticMatrixRecurse(
+                    sortedMapKeyIndex, std::make_optional(systemSForPair),
+                    std::make_optional(systemPPrimeQPrimeForPair), systemSRank);
+                if (mappingResult) {
+                    // If we're here, then this mapping is a success
+                    return mappingResult;
                 }
+                // If we're here, then mapping this v from M to vMap from Mprime didn't work, so
+                // continue the loop and try to map v to another vector from Mprime with the same
+                // map key.
+                //
+                onMappingFailed(sortedMapKeyIndex, i, j);
             }
 
         skip_this_v:

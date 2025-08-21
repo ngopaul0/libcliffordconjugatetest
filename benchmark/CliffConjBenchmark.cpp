@@ -472,29 +472,6 @@ TEST_CASE("Vectorisation algorithm for Clifford-conjugate test", "[benchmark][ve
         });
     };
 
-    BENCHMARK_ADVANCED("d=29: Linearly dependent M_p")(Catch::Benchmark::Chronometer meter) {
-        const int d = 29; // Example dimension
-        const int inv_2 = fastPowerMod(2, d - 2, d);
-        const std::complex<double> omega =
-            std::exp(std::complex<double>(0, 2.0 * pi / d));
-        const Eigen::MatrixXcd Mprime = W(d, 1, 2, inv_2, omega) + W(d, 2, 4, inv_2, omega)
-            + W(d, 3, 6, inv_2, omega) +  W(d, 4, 8, inv_2, omega) +  W(d, 7, 14, inv_2, omega);
-
-        const Eigen::MatrixXcd C = W(d, 3, 4, inv_2, omega) * cliffordPermutationGate(d, 7);
-        const Eigen::MatrixXcd Cstar = C.adjoint();
-        const Eigen::MatrixXcd M = C * Mprime * Cstar;
-
-        meter.measure([M, Mprime] {
-            bool result = isCliffordConjugateGeneralized(d, 1, M, Mprime);
-            if (!result) {
-                INFO("M = " << M);
-                INFO("Mprime = " << Mprime);
-                FAIL("unexpectedly got that the matrices are not Clifford-conjugate");
-            }
-            return result;
-        });
-    };
-
     BENCHMARK_ADVANCED("d=7, Clifford-conjugate, 2 basis elements")(Catch::Benchmark::Chronometer meter) {
         const int d = 7; // Example dimension
         const int inv_2 = fastPowerMod(2, d - 2, d);

@@ -39,7 +39,6 @@ inline size_t computeIntegralPower(const size_t base, const size_t exponent) {
 
 /**
  * @brief Assuming u = omega^k * v, where omega is the dth root of unity, computes the value of k.
- * TODO: Consider replacing this with the value of n computed in FMap's compute_x_forMap
  *
  * @param d The prime for the dth root of unity
  * @param u The first complex number, an instance of std::complex<double>.

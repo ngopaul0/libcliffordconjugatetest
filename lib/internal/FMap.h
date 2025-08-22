@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <complex>
 #include <list>
+#include <numeric>
 #include <optional>
 #include <ranges>
 #include <unordered_map>
@@ -20,7 +21,8 @@ inline double roundMapKey(double key, double epsilon) {
     return std::round(key / epsilon) * epsilon;
 }
 
-inline double compute_x_forMap(const size_t d, const std::complex<double>& z, double epsilon) {
+inline double compute_x_and_n(const size_t d, const std::complex<double>& z, size_t& nRef,
+                              double epsilon) {
     // First express z as z = r * exp(i * theta).
     // Then to express z = r * exp(2*pi*i/d * (n + x)), from z = r * exp(i * theta) we conclude
     // theta = 2*pi/d * (n + x), so n + x = d * theta / (2 * pi)
@@ -58,13 +60,10 @@ inline double compute_x_forMap(const size_t d, const std::complex<double>& z, do
 
     double n;
     double x = std::modf(nPlusX, &n);
-    double roundedX;
     if (isApproxEqual(x, 1.0, epsilon)) {
         // x is constrained to be in [0,1) for uniqueness
-        // n += 1;
-        roundedX = 0.0;
-    } else {
-        roundedX = roundMapKey(x, epsilon);
+        n += 1;
+        x = 0.0;
     }
 #ifndef NDEBUG
     // compiler probably detects and optimizes this, but just be absolutely certain it's not
@@ -73,8 +72,47 @@ inline double compute_x_forMap(const size_t d, const std::complex<double>& z, do
         abs(z) * std::exp(std::complex<double>(0, 2 * pi / static_cast<double>(d) * (n + x)));
     assert(isApproxEqual(z, rhs, epsilon));
 #endif
-    return roundedX;
+    nRef = n;
+    return x;
 }
+
+/**
+ * A Pauli basis coefficient, i.e. a representation of
+ *
+ *      f_M(p,q) = r * exp(2*pi*i/d * (n + x)), r in R, n in Z, x in [0, 1)
+ */
+class PauliCoeff {
+    const double r_;
+    size_t n_;
+    const double x_;
+
+  public:
+    PauliCoeff() : r_(0.0), n_(0), x_(0.0) {}
+
+    PauliCoeff(const double r, const size_t n, const double x) : r_(r), n_(n), x_(x) {}
+
+    PauliCoeff(const size_t d, const std::complex<double>& z, const double precisionFor_r,
+               const double precisionFor_x)
+        : r_(std::abs(z)), n_(0), x_(compute_x_and_n(d, z, n_, precisionFor_x)) {
+        assert(isApproxEqual(z, complexVal(d), precisionFor_r));
+    }
+
+    [[nodiscard]] double r() const { return r_; }
+    [[nodiscard]] double n() const { return n_; }
+    [[nodiscard]] double x() const { return x_; }
+
+    [[nodiscard]] std::complex<double> complexVal(const size_t d) const {
+        return r_ * std::exp(std::complex<double>(0, 2 * pi / static_cast<double>(d) * (n_ + x_)));
+    }
+
+    // Overload the equality operator for use in unordered_map
+    bool operator==(const PauliCoeff& other) const { return r_ == other.r_ && x_ == other.x_; }
+
+    friend std::ostream& operator<<(std::ostream& os, const PauliCoeff& obj) {
+        os << "PauliCoeff(r=" << obj.r() << ", n=" << obj.n() << ", x=" << obj.x() << ")";
+        return os;
+    }
+};
 
 /**
  * A key for use in the mapping of (abs(z), x(z)) where z in C is expressed as
@@ -92,10 +130,13 @@ class FMapKey {
 
     FMapKey(const double r, const double x) : r_(r), x_(x) {}
 
+    FMapKey(const PauliCoeff& coeff, const double precisionFor_r, const double precisionFor_x)
+        : r_(roundMapKey(coeff.r(), precisionFor_r)), x_(roundMapKey(coeff.x(), precisionFor_x)) {}
+
     FMapKey(const size_t d, const std::complex<double>& z, const double precisionFor_r,
             const double precisionFor_x)
-        : r_(roundMapKey(std::abs(z), precisionFor_r)),
-          x_(r_ != 0.0 ? compute_x_forMap(d, z, precisionFor_x) : 0.0) {}
+        : FMapKey(PauliCoeff(d, z, precisionFor_r, precisionFor_x), precisionFor_r,
+                  precisionFor_x) {}
 
     [[nodiscard]] double r() const { return r_; }
     [[nodiscard]] double x() const { return x_; }
@@ -138,14 +179,56 @@ struct FMapKeyHash {
  */
 using MatrixCoordinate = Eigen::Vector<long, Eigen::Dynamic>;
 
+/**
+ * Entries of coordinates paired with n, where coords[i] returns a vector v in Z_d^(2n) such that
+ * n = n[i] and
+ *
+ *      f_M(v) = r * exp(2*pi*i/d * (n + x)), r in R, n in Z, x in [0,1)
+ *
+ * r and x can be obtained from the map key..
+ */
+struct FMapEntry {
+    // these are paired together
+    std::vector<MatrixCoordinate> coords;
+    std::vector<size_t> n;
+
+    size_t size() const {
+        assert(coords.size() == n.size());
+        return coords.size();
+    }
+
+    template <typename _Gen>
+    void shuffle(_Gen&& gen) {
+        if (size() <= 1) {
+            return;
+        }
+        std::vector<size_t> indices(size());
+        // fill with indices
+        std::iota(indices.begin(), indices.end(), 0);
+        std::shuffle(indices.begin(), indices.end(), gen);
+
+        // create new matrix based on shuffled indices
+        std::vector<MatrixCoordinate> new_coords(size());
+        std::vector<size_t> new_n(size());
+        for (size_t i = 0; i < size(); ++i) {
+            new_coords[i] = coords[indices[i]];
+            new_n[i] = n[indices[i]];
+        }
+
+        // replace the original vectors
+        coords = std::move(new_coords);
+        n = std::move(new_n);
+    }
+};
+
 struct FMap {
   private:
     const size_t d_;
     const size_t tupleSize_;
     const double precisionFor_r_;
     const double precisionFor_x_;
-    std::unordered_map<FMapKey, std::vector<MatrixCoordinate>, FMapKeyHash> map_;
-    static const std::vector<MatrixCoordinate> EMPTY_PAIR_LIST;
+    std::unordered_map<FMapKey, FMapEntry, FMapKeyHash> map_;
+    static const FMapEntry EMPTY_ENTRY;
 
     static constexpr size_t computeTupleLength(const size_t numQubits) {
         // 2 * numQubits
@@ -153,9 +236,12 @@ struct FMap {
     }
 
   public:
-    explicit FMap(size_t d, size_t n, double precisionFor_r, double precisionFor_x)
-        : d_(d), tupleSize_(computeTupleLength(n)), precisionFor_r_(precisionFor_r), precisionFor_x_(precisionFor_x) {};
-    explicit FMap(size_t d, size_t n, size_t mapReservation, double precisionFor_r, double precisionFor_x)
+    explicit FMap(const size_t d, const size_t n, const double precisionFor_r,
+                  const double precisionFor_x)
+        : d_(d), tupleSize_(computeTupleLength(n)), precisionFor_r_(precisionFor_r),
+          precisionFor_x_(precisionFor_x) {};
+    explicit FMap(const size_t d, const size_t n, const size_t mapReservation,
+                  const double precisionFor_r, double precisionFor_x)
         : FMap(d, n, precisionFor_r, precisionFor_x) {
         map_.reserve(mapReservation);
     };
@@ -168,8 +254,10 @@ struct FMap {
         if (coordinate.rows() != tupleSize_) {
             throw std::invalid_argument("Bad matrix coordinate size");
         }
-        const auto key = FMapKey(d_, value, precisionFor_r_, precisionFor_x_);
-        map_[key].push_back(std::move(coordinate));
+        const auto pauliCoeff = PauliCoeff(d_, value, precisionFor_r_, precisionFor_x_);
+        const auto key = FMapKey(pauliCoeff, precisionFor_r_, precisionFor_x_);
+        map_[key].coords.push_back(std::move(coordinate));
+        map_[key].n.push_back(pauliCoeff.n());
         return key;
     }
 
@@ -177,20 +265,31 @@ struct FMap {
         if (coordinate.rows() != tupleSize_) {
             throw std::invalid_argument("Bad matrix coordinate size");
         }
-        const auto key = FMapKey(d_, value, precisionFor_r_, precisionFor_x_);
-        map_[key].push_back(std::move(coordinate));
+        const auto pauliCoeff = PauliCoeff(d_, value, precisionFor_r_, precisionFor_x_);
+        const auto key = FMapKey(pauliCoeff, precisionFor_r_, precisionFor_x_);
+        map_[key].coords.push_back(std::move(coordinate));
+        map_[key].n.push_back(pauliCoeff.n());
         return key;
     }
 
     const std::vector<MatrixCoordinate>& get(const FMapKey& key) const {
         const auto it = map_.find(key);
-        return it != map_.end() ? it->second : EMPTY_PAIR_LIST;
+        return it != map_.end() ? it->second.coords : EMPTY_ENTRY.coords;
+    }
+
+    const FMapEntry& getWithN(const FMapKey& key) const {
+        const auto it = map_.find(key);
+        return it != map_.end() ? it->second : EMPTY_ENTRY;
+    }
+
+    PauliCoeff createPauliCoeff(const std::complex<double>& value) const {
+        return PauliCoeff(d_, value, precisionFor_r_, precisionFor_x_);
     }
 
     /**
      * @return Mutable reference
      */
-    std::optional<std::reference_wrapper<std::vector<MatrixCoordinate>>> getMut(const FMapKey& key) {
+    std::optional<std::reference_wrapper<FMapEntry>> getMut(const FMapKey& key) {
         const auto it = map_.find(key);
         if (it == map_.end()) {
             return std::nullopt;
@@ -199,7 +298,8 @@ struct FMap {
     }
 
     size_t getCount(const std::complex<double>& fMValue) const {
-        const auto key = FMapKey(d_, fMValue, precisionFor_r_, precisionFor_x_);
+        const auto pauliCoeff = PauliCoeff(d_, fMValue, precisionFor_r_, precisionFor_x_);
+        const auto key = FMapKey(pauliCoeff, precisionFor_r_, precisionFor_x_);
         return getCount(key);
     }
 

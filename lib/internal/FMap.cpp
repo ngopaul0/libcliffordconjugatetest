@@ -2,7 +2,7 @@
 
 namespace cliffconjtest {
 
-const std::vector<MatrixCoordinate> FMap::EMPTY_PAIR_LIST{};
+const FMapEntry FMap::EMPTY_ENTRY{};
 
 const FMapKey FMapKey::ZERO_KEY(0.0, 0.0);
 

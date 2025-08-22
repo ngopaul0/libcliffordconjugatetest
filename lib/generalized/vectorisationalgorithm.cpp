@@ -227,8 +227,11 @@ struct RecursionContext {
         }
 
         const auto& key = sortedKeys_[sortedMapKeyIndex];
-        const auto& vecsM = Mmap_.get(key);
-        const auto& vecsMprime = Mprimemap_.get(key);
+        const auto& vecsMEntry = Mmap_.getWithN(key);
+        const auto& vecsMprimeEntry = Mprimemap_.getWithN(key);
+
+        const auto& vecsM = vecsMEntry.coords;
+        const auto& vecsMprime = vecsMprimeEntry.coords;
         if (vecsM.size() != vecsMprime.size()) {
             throw std::invalid_argument("map size mismatch");
         }
@@ -254,6 +257,7 @@ struct RecursionContext {
             }
 
             const auto& v = vecsM[i];
+            const size_t n_v = vecsMEntry.n[i];
             // Test the validity of a symplectic matrix mapping v to vMap.
             // If this inner loop continues, that means that particular mapping failed, and the
             // next iteration is looking at another mapping possibility.
@@ -266,20 +270,31 @@ struct RecursionContext {
                 }
 
                 const auto& vMap = vecsMprime[j];
+                const size_t n_vMap = vecsMprimeEntry.n[j];
                 // Will create a copy of the system
                 CliffPermutationSysMatrix systemSForPair;
                 PPrimeQPrimeSysMatrix systemPPrimeQPrimeForPair;
 
-                // Can optimize this by storing the value of n inside M_p and just taking the
-                // difference between the integers n_alpha and n_beta
+                // Computes k such that v = omega^k vMap.
+                // This works because we bin by (r, x), where
+                //     f_M(p,q) = r * exp(2*pi*i/d * (n + x)),
+                // where r in R, n in Z, x in [0, 1). So by the way we've binned in MMap and
+                // MprimeMap, v and vMap have exact same r and x values. The difference in their
+                // n values thus represents the value of k such that v = omega^k vMap, since
+                //  omega^k = exp(2pi*i/d * k)
+                //  omega^k = v / vMap
+                //          = r * exp(2*pi*i/d * (n_v + x)) / r * exp(2*pi*i/d * (n_vMap + x))
+                //          = exp(2*pi*i/d * (n_v + x) - 2*pi*i/d * (n_vMap + x))
+                //          = exp(2*pi*i/d * (n_v - n_vMap))
+                // So k = n_v - n_vMap mod d.
+                const size_t k = safeMod(n_v - n_vMap, d_);
+#ifndef NDEBUG
                 const auto alpha = M_p_.get(v);
                 const auto beta = Mprime_p_.get(vMap);
                 const double kTest = checkPhase(d_, alpha, beta);
-                const size_t k = std::llround(kTest);
-                if (std::abs(kTest - k) > 1e-5) {
-                    continue;
-                }
-
+                const size_t kRounded = std::llround(kTest);
+                assert(kRounded == k);
+#endif
                 size_t systemSRank = 0;
                 if (!systemForS || !systemForPPrimeQPrime) {
                     systemSForPair = createSystemForS(v, vMap);
@@ -436,14 +451,12 @@ findSymplecticMatrix(const size_t d, const size_t n, const std::complex<double>&
         std::random_device rd;
         std::mt19937 gen(rd());
         for (const auto& key : sortedKeys) {
-            auto vecM = Mmap.getMut(key);
-            if (vecM) {
-                std::ranges::shuffle(vecM->get(), gen);
+            if (const auto vecMEntry = Mmap.getMut(key)) {
+                vecMEntry->get().shuffle(gen);
             }
 
-            auto vecMprime = Mprimemap.getMut(key);
-            if (vecMprime) {
-                std::ranges::shuffle(vecMprime->get(), gen);
+            if (const auto vecMPrimeEntry = Mprimemap.getMut(key)) {
+                vecMPrimeEntry->get().shuffle(gen);
             }
         }
     }

@@ -2,8 +2,8 @@
 #define BRUTEFORCETEST_H
 #include <Eigen/Dense>
 #include <complex>
-#include <vector>
 #include <variant>
+#include <vector>
 
 #include "conjtestlemma10.h"
 #include "multidimarray.h"
@@ -35,7 +35,7 @@ class Sp1ZdGates {
  * @return The matrix M_p such that M_p(i,j) = f_M(i,j)
  */
 inline MpMatrixType createMpMatrix(const Eigen::Ref<const Eigen::MatrixXcd>& M,
-                                       const std::complex<double>& omega, const size_t inv_2) {
+                                   const std::complex<double>& omega, const size_t inv_2) {
     const size_t d = M.rows();
     if (d != M.cols()) {
         throw std::invalid_argument("non-square matrix");
@@ -99,8 +99,7 @@ createValueFromFound(const Sp1ZdMatrix& S, const size_t pPrime, const size_t qPr
 template <bool IsReturningInfo = false>
 BruteForceReturnType<IsReturningInfo> bruteForceTestCliffordConjugacy(
     const Eigen::Ref<const Eigen::MatrixXcd>& M, const Eigen::Ref<const Eigen::MatrixXcd>& Mprime,
-    const std::complex<double>& omega, const MultiDimensionalArray<std::complex<double>, false>& M_p,
-    const MultiDimensionalArray<std::complex<double>, false>& Mprime_p,
+    const std::complex<double>& omega, const MpMatrixType& M_p, const MpMatrixType& Mprime_p,
     std::optional<std::reference_wrapper<const Sp1ZdGates>> gates = std::nullopt) {
 
     // TODO: Update for multi qudit case
@@ -123,7 +122,7 @@ BruteForceReturnType<IsReturningInfo> bruteForceTestCliffordConjugacy(
 
     // Variables for the parallel region
     std::optional<BruteForceReturnType<IsReturningInfo>> result;
-    #pragma omp parallel for collapse(2) shared(result) schedule(dynamic)
+#pragma omp parallel for collapse(2) shared(result) schedule(dynamic)
     for (long pPrime = 0; pPrime < d; pPrime++) {
         for (long qPrime = 0; qPrime < d; qPrime++) {
             if (result.has_value()) {
@@ -140,7 +139,7 @@ BruteForceReturnType<IsReturningInfo> bruteForceTestCliffordConjugacy(
                         if (const Eigen::Vector<long, 2> pPrime_qPrime_vec(pPrime, qPrime);
                             test_clifford_conjugate_lemma_10(d, pPrime_qPrime_vec, omega, M, M_p,
                                                              Mprime_p, S)) {
-                            #pragma omp critical(result)
+#pragma omp critical(result)
                             {
                                 if (!result.has_value()) {
                                     result = std::make_optional(

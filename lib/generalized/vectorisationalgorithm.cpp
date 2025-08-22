@@ -270,6 +270,8 @@ struct RecursionContext {
                 CliffPermutationSysMatrix systemSForPair;
                 PPrimeQPrimeSysMatrix systemPPrimeQPrimeForPair;
 
+                // Can optimize this by storing the value of n inside M_p and just taking the
+                // difference between the integers n_alpha and n_beta
                 const auto alpha = M_p_.get(v);
                 const auto beta = Mprime_p_.get(vMap);
                 const double kTest = checkPhase(d_, alpha, beta);

@@ -24,8 +24,7 @@ namespace cliffconjtest {
 inline bool test_clifford_conjugate_lemma_10(
     const size_t d, const Eigen::Vector<long, Eigen::Dynamic>& pPrime_qPrime_vec,
     const std::complex<double>& omega, const Eigen::Ref<const Eigen::MatrixXcd>& M,
-    const MultiDimensionalArray<std::complex<double>, false>& M_p,
-    const MultiDimensionalArray<std::complex<double>, false>& Mprime_p,
+    const MpMatrixType& M_p, const MpMatrixType& Mprime_p,
     const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& symplectic_transform) {
 
     const size_t twoTimes_n = pPrime_qPrime_vec.rows();

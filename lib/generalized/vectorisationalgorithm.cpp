@@ -6,6 +6,7 @@
 #include <random>
 #include <stack>
 #include <unordered_set>
+#include <variant>
 
 #include "internal/FMap.h"
 #include "internal/conjtestlemma10.h"
@@ -94,7 +95,7 @@ struct RecursionContext {
         [[nodiscard]] bool isIndexAllowedVecM(const size_t idx) const {
             const auto& top = unmappedIndicesStack_.top();
             return std::visit(
-                [idx]<typename T0>(T0&& arg) {
+                [idx]<typename T0>(T0&& arg) -> bool {
                     using T = std::decay_t<T0>;
                     if constexpr (std::is_same_v<T, UnmappedIndicesLarge>) {
                         return arg.unmappedVecMIndices_[idx];
@@ -108,7 +109,7 @@ struct RecursionContext {
         [[nodiscard]] bool isIndexAllowedVecMprime(const size_t idx) const {
             const auto& top = unmappedIndicesStack_.top();
             return std::visit(
-                [idx]<typename T0>(T0&& arg) {
+                [idx]<typename T0>(T0&& arg) -> bool {
                     using T = std::decay_t<T0>;
                     if constexpr (std::is_same_v<T, UnmappedIndicesLarge>) {
                         return arg.unmappedVecMprimeIndices_[idx];
@@ -121,8 +122,8 @@ struct RecursionContext {
 
         void markMapping(const size_t vecMIndex, const size_t vecMPrimeIndex) {
             auto& top = unmappedIndicesStack_.top();
-            return std::visit(
-                [vecMIndex, vecMPrimeIndex]<typename T0>(T0&& arg) {
+            std::visit(
+                [vecMIndex, vecMPrimeIndex]<typename T0>(T0&& arg) -> void {
                     using T = std::decay_t<T0>;
                     if constexpr (std::is_same_v<T, UnmappedIndicesLarge>) {
                         arg.unmappedVecMIndices_[vecMIndex] = false;
@@ -137,8 +138,8 @@ struct RecursionContext {
 
         void unmarkMapping(const size_t vecMIndex, const size_t vecMPrimeIndex) {
             auto& top = unmappedIndicesStack_.top();
-            return std::visit(
-                [vecMIndex, vecMPrimeIndex]<typename T0>(T0&& arg) {
+            std::visit(
+                [vecMIndex, vecMPrimeIndex]<typename T0>(T0&& arg) -> void {
                     using T = std::decay_t<T0>;
                     if constexpr (std::is_same_v<T, UnmappedIndicesLarge>) {
                         arg.unmappedVecMIndices_[vecMIndex] = true;
@@ -302,7 +303,7 @@ struct RecursionContext {
                     continue;
                 }
                 if (shouldSkipThisVecMKey(sortedMapKeyIndex, i)) {
-                    goto skip_this_v;
+                    break;
                 }
 
                 const auto& vMap = vecsMprime[j];
@@ -408,8 +409,6 @@ struct RecursionContext {
                 // another possible mapping is being tried.
                 unmarkMappingAndPopFromHistory(sortedMapKeyIndex, i, j);
             }
-
-        skip_this_v:
         }
 
         // Advance the key index; unable to find in current bin

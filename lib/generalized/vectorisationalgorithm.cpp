@@ -368,6 +368,7 @@ struct RecursionContext {
                         }
                         continue;
                     }
+                    // TODO: Update this with the better method for handling linear dependent vectors
                     if (systemSRank == lastSystemSRank) {
                         // System rank not changing means what we just added was just a multiple
                         // of some other row

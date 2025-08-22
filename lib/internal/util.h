@@ -39,14 +39,28 @@ inline size_t computeIntegralPower(const size_t base, const size_t exponent) {
 
 /**
  * @brief Assuming u = omega^k * v, where omega is the dth root of unity, computes the value of k.
+ * TODO: Consider replacing this with the value of n computed in FMap's compute_x_forMap
  *
  * @param d The prime for the dth root of unity
  * @param u The first complex number, an instance of std::complex<double>.
  * @param v The second complex number, an instance of std::complex<double>.
- * @return A double representing the scaled phase difference.
+ * @return A double representing the scaled phase difference. This function is guaranteed to return
+ * an integer if u == v or u = 0 or v = 0 (i.e. it will return 0).
  */
 inline double checkPhase(size_t d, const std::complex<double>& u, const std::complex<double>& v,
                          double epsilon = 1e-5) {
+    // Avoid round off errors. We will be dividing by cosNumerator later
+    if (isApproxEqual(u, v, epsilon)) {
+        return 0.0;
+    }
+    // While any power of omega (even non-integral) would work for u=0 or v=0, just return 0.0
+    if (isApproxEqual(u.imag(), 0, epsilon) && isApproxEqual(u.real(), 0, epsilon)) {
+        return 0.0;
+    }
+    if (isApproxEqual(v.imag(), 0, epsilon) && isApproxEqual(v.real(), 0, epsilon)) {
+        return 0.0;
+    }
+
     // Extract real and imaginary parts from the complex numbers.
     double a1 = u.real();
     double a2 = u.imag();
@@ -86,7 +100,13 @@ inline double checkPhase(size_t d, const std::complex<double>& u, const std::com
     }
 
     const double result = d * actualAngle / (2.0 * pi);
-    return isApproxEqual(result, d, epsilon) ? 0.0 : result;
+
+    const double finalResult = isApproxEqual(result, d, epsilon) ? 0.0 : result;
+#ifndef NDEBUG
+    const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));
+    assert(isApproxEqual(u, std::pow(omega, finalResult) * v));
+#endif
+    return finalResult;
 }
 
 /**

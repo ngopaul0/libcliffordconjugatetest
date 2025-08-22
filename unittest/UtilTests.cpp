@@ -221,6 +221,21 @@ TEST_CASE("check_phase", "[check_phase]") {
         REQUIRE_THAT(checkPhase(d, v2, v1), Catch::Matchers::WithinAbs(0, 1e-5));
     }
 
+    SECTION("For equal numbers, returns an integer even against round off errors") {
+        const std::complex zero = {0.0, 0.0};
+        const std::complex alpha = {6.1679056923619811e-17, -9.8686491077791687e-17};
+        const std::complex beta = {-1.2050267067592308e-07, -2.4270129152449383e-17};
+        // The precision is 1e-5. These zero values are specified up to 1e-7
+        constexpr double precision = 1e-5;
+        CHECK(isApproxEqual(alpha, zero, precision));
+        CHECK(isApproxEqual(beta, zero, precision));
+        REQUIRE(isApproxEqual(alpha, beta, precision));
+        const auto k = checkPhase(3, alpha, beta, precision);
+        const auto kRounded = std::llround(k);
+        // If they're (approximately) equal, it should return an integer result
+        REQUIRE_THAT(k - kRounded, Catch::Matchers::WithinAbs(0, precision));
+    }
+
     SECTION("Works on random cases") {
         const size_t d = 7;
         const std::complex<double> omega = std::exp(std::complex<double>(0, 2.0 * pi / d));

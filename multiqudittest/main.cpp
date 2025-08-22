@@ -49,12 +49,24 @@ int main() {
     const long inv_2 = cliffconjtest::modInverse(2, d);
     const std::complex<double> omega =
         std::exp(std::complex<double>(0, 2.0 * cliffconjtest::pi / d));
-    const std::vector<std::pair<long, long>> coords1 = {{1, 2}, {0, 1}, {2, 2}};
-    const std::vector<std::pair<long, long>> coords2 = {{2, 1}, {2, 0}, {1, 1}};
+    /*
+    const std::vector<std::pair<long, long>> coords1 = {{1, 2}, {0, 1}};
+    const std::vector<std::pair<long, long>> coords2 = {{0, 0}};
+
+    const std::vector<std::pair<long, long>> coords3 = {{2, 1}, {2, 0}};
+    const std::vector<std::pair<long, long>> coords4 = {{1, 0}};
+    const Eigen::MatrixXcd H1 = computeMSumm(d, coords1, inv_2, omega);
+    const Eigen::MatrixXcd H2 = computeMSumm(d, coords2, inv_2, omega);
+    const Eigen::MatrixXcd H = std::complex<double>(1, -3) * Eigen::kroneckerProduct(H1, H2);
 
     const Eigen::MatrixXcd M1 = computeMSumm(d, coords1, inv_2, omega);
     const Eigen::MatrixXcd M2 = computeMSumm(d, coords2, inv_2, omega);
-    const Eigen::MatrixXcd M = Eigen::kroneckerProduct(M1, M2);
+    */
+
+    // This example will currently fail at i = 7 without the early checks against error propagation
+    // in checkPhase
+    const Eigen::MatrixXcd M = // Eigen::kroneckerProduct(M1, M2) + H
+        - std::sqrt(2) * Eigen::kroneckerProduct(cliffconjtest::W(d, 1, 3, inv_2, omega), cliffconjtest::W(d, 1, 3, inv_2, omega));
 
     std::atomic_bool foundBad = false;
     std::atomic_size_t counter = INT_MAX;
@@ -85,7 +97,9 @@ int main() {
         const auto result = cliffconjtest::isCliffordConjugateGeneralized(d, n, M, Mprime);
         auto endTime = std::chrono::high_resolution_clock::now();
         if (!result) {
-            std::cout << "Gate " << i << "gave an unexpected non Clifford-conjugate result: \n"
+            const auto timeSinceStart =
+                std::chrono::duration_cast<std::chrono::milliseconds>(endTime - workStartTime);
+            std::cout << "Gate i=" << i << " ( " << timeSinceStart << ") gave an unexpected non Clifford-conjugate result: \n"
                       << C << std::endl;
             foundBad = true;
             continue;
@@ -98,7 +112,7 @@ int main() {
             std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
         auto durationMs =
             std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
-        if (counter > 1000) {
+        if (counter > 1000 || totalGateCompleteCount == numMatrices - 1) {
             counter = 0;
             const auto timeSinceStart =
                 std::chrono::duration_cast<std::chrono::milliseconds>(endTime - workStartTime);

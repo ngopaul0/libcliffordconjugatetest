@@ -468,22 +468,25 @@ struct RecursionContext {
 std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>>
 findSymplecticMatrix(const size_t d, const size_t n, const std::complex<double>& omega,
                      const Eigen::Ref<const Eigen::MatrixXcd>& M, const MpMatrixType& M_p,
-                     const MpMatrixType& Mprime_p, FMap& Mmap, FMap& Mprimemap) {
+                     const MpMatrixType& Mprime_p, FMap& Mmap, FMap& Mprimemap,
+                     const bool shuffleKeys) {
     const std::vector<FMapKey> sortedKeys = Mmap.sortedKeys();
 
     s_numRecursiveCalls = 0;
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    for (const auto& key : sortedKeys) {
-        auto vecM = Mmap.getMut(key);
-        if (vecM) {
-            std::ranges::shuffle(vecM->get(), gen);
-        }
+    if (shuffleKeys) {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        for (const auto& key : sortedKeys) {
+            auto vecM = Mmap.getMut(key);
+            if (vecM) {
+                std::ranges::shuffle(vecM->get(), gen);
+            }
 
-        auto vecMprime = Mprimemap.getMut(key);
-        if (vecMprime) {
-            std::ranges::shuffle(vecMprime->get(), gen);
+            auto vecMprime = Mprimemap.getMut(key);
+            if (vecMprime) {
+                std::ranges::shuffle(vecMprime->get(), gen);
+            }
         }
     }
 

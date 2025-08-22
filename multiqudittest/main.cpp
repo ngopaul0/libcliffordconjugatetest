@@ -8,6 +8,7 @@
 #include "internal/FMap.h"
 #include "internal/bruteforcetest.h"
 #include "internal/cliffordgates.h"
+#include "internal/complexexactrepr.h"
 #include "internal/util.h"
 
 Eigen::MatrixXcd computeMSumm(size_t d, const std::vector<std::pair<long, long>>& coords,
@@ -17,6 +18,26 @@ Eigen::MatrixXcd computeMSumm(size_t d, const std::vector<std::pair<long, long>>
         sum += cliffconjtest::W(d, p, q, inv_2, omega);
     }
     return sum;
+}
+
+template <typename MatrixType>
+std::string getComplexMatrixExactRepo(const MatrixType& M) {
+    std::stringstream ss;
+    for (long i = 0; i < M.rows(); i++) {
+        for (long j = 0; j < M.cols(); j++) {
+            // access the same memory location using different types.
+            std::complex<double> value = M(i, j);
+            ss << ComplexExactRepr(value);
+            if (j != M.cols() - 1) {
+                ss << ", ";
+            }
+        }
+        if (i != M.rows() - 1) {
+            ss << "," << std::endl;
+        }
+    }
+    ss << ";" << std::endl;
+    return ss.str();
 }
 
 // Tests gates in C_2 (Clifford gates
@@ -73,7 +94,6 @@ int main() {
     std::atomic_size_t totalGateCompleteCount = 0;
     std::atomic<unsigned long long> totalDurationMicroS{0};
     std::cout << "Running tests" << std::endl;
-
     const auto workStartTime = std::chrono::high_resolution_clock::now();
 
 #pragma omp parallel for schedule(dynamic)
@@ -99,8 +119,12 @@ int main() {
         if (!result) {
             const auto timeSinceStart =
                 std::chrono::duration_cast<std::chrono::milliseconds>(endTime - workStartTime);
-            std::cout << "Gate i=" << i << " ( " << timeSinceStart << ") gave an unexpected non Clifford-conjugate result: \n"
-                      << C << std::endl;
+            std::stringstream ss;
+            ss << "====" << std::endl;
+            ss << "Gate i=" << i << " (" << timeSinceStart << ") gave an unexpected non Clifford-conjugate result:"
+            << std::endl << getComplexMatrixExactRepo(C) << std::endl;
+            ss << "====" << std::endl;
+            std::cout << ss.str();
             foundBad = true;
             continue;
         }

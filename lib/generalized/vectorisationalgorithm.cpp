@@ -234,10 +234,14 @@ struct RecursionContext {
         mappedVecIndicesStack_.unmarkMapping(vecMIndex, vecMPrimeIndex);
         // Since the mapping did not work, do not use this mapping in the history. Pop
         // history off like a stack.
+#ifndef NDEBUG
+        const size_t sizeBefore = history_[sortedMapKeyIndex].size();
+#endif
         if (const size_t countRemoved = history_[sortedMapKeyIndex].erase(vecMIndex);
             countRemoved != 1) {
             throw std::runtime_error("unexpected bad history state");
         }
+        assert(sizeBefore == history_[sortedMapKeyIndex].size() + 1);
     }
     void markMappingAndPushToHistory(const size_t sortedMapKeyIndex, const size_t vecMIndex,
                                      const size_t vecMPrimeIndex) {
@@ -279,6 +283,12 @@ struct RecursionContext {
         const auto& vecsMprime = Mprimemap_.get(key);
         if (vecsM.size() != vecsMprime.size()) {
             throw std::invalid_argument("map size mismatch");
+        }
+
+        if (history_[sortedMapKeyIndex].size() == vecsM.size()) {
+            // If we're here, then all the vectors in this bin are mapped.
+            // Skip the loops entirely because we're just going to continue everything.
+            goto next_bin_key;
         }
 
         // The loops are used to go to the next mapping possibility if one fails.
@@ -396,6 +406,8 @@ struct RecursionContext {
                 // main step of moving down through the bins. The mapping must be marked to avoid
                 // vectors that are already being used.
                 markMappingAndPushToHistory(sortedMapKeyIndex, i, j);
+                // RECURSION DIVE: Use this mapping and check the other vectors in this bin, or
+                // go on to the next bin.
                 const auto mappingResult = findSymplecticMatrixRecurse(
                     sortedMapKeyIndex, std::make_optional(systemSForPair),
                     std::make_optional(systemPPrimeQPrimeForPair), systemSRank);
@@ -412,10 +424,26 @@ struct RecursionContext {
                 unmarkMappingAndPopFromHistory(sortedMapKeyIndex, i, j);
             }
         }
+        next_bin_key:
+        // If we are here, then either all the vectors in this bin are already mapped to something,
+        // (resulting in a loop exit)
+        // or we tried all the mappings for vectors in vecM and failed and exited the loop.
 
         // Single-element bins have a single, direct mapping. If we got here, then we've failed.
-        if (vecsM.size() == 1 && !mappedVecIndicesStack_.isVecMprimeIndexMapped(0)) {
+        if (vecsM.size() == 1 && !mappedVecIndicesStack_.isVecMIndexMapped(0)) {
             return std::nullopt;
+        }
+        if (!allowedKeys_.empty()) {
+            // If the allowed keys are set, we should only be proceeding if at least one of those
+            // keys are mapped to something.
+            const auto& allowedVecMIndices = allowedKeys_[sortedMapKeyIndex];
+            const bool isAtLeastOneAllowedVecBeingMapped = std::ranges::any_of(allowedVecMIndices,
+                [&](const size_t vecMIndex) {
+                    return mappedVecIndicesStack_.isVecMIndexMapped(vecMIndex);
+                });
+            if (!isAtLeastOneAllowedVecBeingMapped) {
+                return std::nullopt;
+            }
         }
 
         // Advance the key index; unable to find in current bin
@@ -425,6 +453,7 @@ struct RecursionContext {
             return std::nullopt;
         }
         pushNewUnmappedIndices(newSortedKeysIndex);
+        // RECURSION DIVE: Check the next bin.
         const auto resultWhenNextBinSearched =
             findSymplecticMatrixRecurse(newSortedKeysIndex, std::move(systemForS),
                                         std::move(systemForPPrimeQPrime), lastSystemSRank);

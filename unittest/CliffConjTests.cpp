@@ -507,6 +507,49 @@ TEST_CASE("Multi qudit case", "[multiqudit]") {
         REQUIRE(isCliffordConjugateGeneralized(d, n, M, Mprime));
     }
 
+    SECTION("d = 3, 2 qubits, failure from multiqudit test", "[generalized][d=3][n=2]") {
+        // Index 18 from n2-c2-gates-d3-asGATES.npy
+        Eigen::Matrix<std::complex<double>, 9, 9> C1;
+        C1 <<
+            std::complex<double>(0.57735, 0),    std::complex<double>(0.57735, 0),    std::complex<double>(0.57735, 0),    std::complex<double>(0, 0),    std::complex<double>(0, 0),    std::complex<double>(0, 0),    std::complex<double>(0, 0),    std::complex<double>(0, 0),    std::complex<double>(0, 0),
+            std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0.57735, 0),    std::complex<double>(0.57735, 0),    std::complex<double>(0.57735, 0),    std::complex<double>(0, 0),    std::complex<double>(0, 0),    std::complex<double>(0, 0),
+            std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0.57735, 0),    std::complex<double>(0.57735, 0),    std::complex<double>(0.57735, 0),
+            std::complex<double>(0.57735, 0),    std::complex<double>(-0.288675, -0.5), std::complex<double>(-0.288675, 0.5),  std::complex<double>(0, 0),    std::complex<double>(0, 0),    std::complex<double>(0, 0),    std::complex<double>(0, 0),    std::complex<double>(0, 0),    std::complex<double>(0, 0),
+            std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0.57735, 0),    std::complex<double>(-0.288675, -0.5), std::complex<double>(-0.288675, 0.5),  std::complex<double>(0, 0),    std::complex<double>(0, 0),    std::complex<double>(0, 0),
+            std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0.57735, 0),    std::complex<double>(-0.288675, -0.5), std::complex<double>(-0.288675, 0.5),
+            std::complex<double>(0.57735, 0),    std::complex<double>(-0.288675, 0.5),  std::complex<double>(-0.288675, -0.5), std::complex<double>(0, 0),    std::complex<double>(0, 0),    std::complex<double>(0, 0),    std::complex<double>(0, 0),    std::complex<double>(0, 0),    std::complex<double>(0, 0),
+            std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0.57735, 0),    std::complex<double>(-0.288675, 0.5),  std::complex<double>(-0.288675, -0.5), std::complex<double>(0, 0),    std::complex<double>(0, 0),    std::complex<double>(0, 0),
+            std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0, 0),          std::complex<double>(0.57735, 0),    std::complex<double>(-0.288675, 0.5),  std::complex<double>(-0.288675, -0.5);
+
+        Eigen::Matrix<std::complex<double>, 9, 9> C;
+
+        C <<
+        std::complex<double>(0.333333,0),       std::complex<double>(0.333333,-2.04687e-17), std::complex<double>(0.333333,-4.25989e-18), std::complex<double>(-0.166667,0.288675),  std::complex<double>(-0.166667,0.288675),  std::complex<double>(-0.166667,0.288675),  std::complex<double>(0.333333,-7.91653e-17), std::complex<double>(0.333333,-7.91653e-17), std::complex<double>(0.333333,-7.91653e-17),
+        std::complex<double>(-0.166667,0.288675), std::complex<double>(-0.166667,0.288675), std::complex<double>(-0.166667,0.288675), std::complex<double>(-0.166667,0.288675), std::complex<double>(-0.166667,0.288675), std::complex<double>(-0.166667,0.288675), std::complex<double>(-0.166667,-0.288675), std::complex<double>(-0.166667,-0.288675), std::complex<double>(-0.166667,-0.288675),
+        std::complex<double>(0.333333,0),       std::complex<double>(0.333333,0),       std::complex<double>(0.333333,0),       std::complex<double>(-0.166667,-0.288675), std::complex<double>(-0.166667,-0.288675), std::complex<double>(-0.166667,-0.288675), std::complex<double>(-0.166667,-0.288675), std::complex<double>(-0.166667,-0.288675), std::complex<double>(-0.166667,-0.288675),
+        std::complex<double>(0.333333,0),       std::complex<double>(-0.166667,-0.288675), std::complex<double>(-0.166667,0.288675), std::complex<double>(-0.166667,0.288675), std::complex<double>(0.333333,-1.38778e-16), std::complex<double>(-0.166667,-0.288675), std::complex<double>(0.333333,-7.91653e-17), std::complex<double>(-0.166667,-0.288675), std::complex<double>(-0.166667,0.288675),
+        std::complex<double>(-0.166667,0.288675), std::complex<double>(0.333333,-2.27195e-16), std::complex<double>(-0.166667,-0.288675), std::complex<double>(-0.166667,0.288675), std::complex<double>(0.333333,-1.68498e-16), std::complex<double>(-0.166667,-0.288675), std::complex<double>(-0.166667,-0.288675), std::complex<double>(-0.166667,0.288675), std::complex<double>(0.333333,-3.05311e-16),
+        std::complex<double>(0.333333,0),       std::complex<double>(-0.166667,-0.288675), std::complex<double>(-0.166667,0.288675), std::complex<double>(-0.166667,-0.288675), std::complex<double>(-0.166667,0.288675), std::complex<double>(0.333333,-3.56721e-16), std::complex<double>(-0.166667,-0.288675), std::complex<double>(-0.166667,0.288675), std::complex<double>(0.333333,-2.81816e-16),
+        std::complex<double>(0.333333,0),       std::complex<double>(-0.166667,0.288675), std::complex<double>(-0.166667,-0.288675), std::complex<double>(-0.166667,0.288675), std::complex<double>(-0.166667,-0.288675), std::complex<double>(0.333333,-5.27356e-16), std::complex<double>(0.333333,-7.91653e-17), std::complex<double>(-0.166667,0.288675), std::complex<double>(-0.166667,-0.288675),
+        std::complex<double>(-0.166667,0.288675), std::complex<double>(-0.166667,-0.288675), std::complex<double>(0.333333,-6.15773e-16), std::complex<double>(-0.166667,0.288675), std::complex<double>(-0.166667,-0.288675), std::complex<double>(0.333333,-5.40868e-16), std::complex<double>(-0.166667,-0.288675), std::complex<double>(0.333333,-3.05311e-16), std::complex<double>(-0.166667,0.288675),
+        std::complex<double>(0.333333,0),       std::complex<double>(-0.166667,0.288675), std::complex<double>(-0.166667,-0.288675), std::complex<double>(-0.166667,-0.288675), std::complex<double>(0.333333,-3.56721e-16), std::complex<double>(-0.166667,0.288675), std::complex<double>(-0.166667,-0.288675), std::complex<double>(0.333333,-2.98024e-16), std::complex<double>(-0.166667,0.288675);
+
+        const int d = 3;
+        const size_t n = 2;
+        const long inv_2 = modInverse(2, d);
+        const std::complex<double> omega =std::exp(std::complex<double>(0, 2.0 * pi / d));
+        const std::vector<std::pair<long, long>> coords1 = {{1, 2}, {0, 1}, {2, 2}};
+        const std::vector<std::pair<long, long>> coords2 = {{2, 1}};
+
+        const Eigen::MatrixXcd M1 = computeMSum(d, coords1, inv_2, omega);
+        const Eigen::MatrixXcd M2 = computeMSum(d, coords2, inv_2, omega);
+        const Eigen::MatrixXcd M = Eigen::kroneckerProduct(M1, M2);
+
+        Eigen::Matrix<std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> Mprime = C * M * C.adjoint();
+
+        REQUIRE(isCliffordConjugateGeneralized(d, n, M, Mprime));
+    }
+
     SECTION("d=3, 2 qudits, nonexample", "[generalized][d=3][n=2][nonexample]") {
         const int d = 3;
         const size_t n = 2;

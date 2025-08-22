@@ -227,22 +227,18 @@ struct RecursionContext {
         return false;
     }
 
-    void onMappingFailed(const size_t sortedMapKeyIndex, const size_t vecMIndex,
-                         const size_t vecMPrimeIndex) {
+    void unmarkMappingAndPopFromHistory(const size_t sortedMapKeyIndex, const size_t vecMIndex,
+                                        const size_t vecMPrimeIndex) {
         unmappedVecIndicesStack_.unmarkMapping(vecMIndex, vecMPrimeIndex);
         // Since the mapping did not work, do not use this mapping in the history. Pop
         // history off like a stack.
-        //
-        // We'll also discard the system for this mapping and recopy the previous system
-        // from the start of the recursive call. Again, if the loop advances, it means
-        // another possible mapping is being tried.
         if (const size_t countRemoved = history_[sortedMapKeyIndex].erase(vecMIndex);
             countRemoved != 1) {
             throw std::runtime_error("unexpected bad history state");
         }
     }
-    void onMappingPlausible(const size_t sortedMapKeyIndex, const size_t vecMIndex,
-                            const size_t vecMPrimeIndex) {
+    void markMappingAndPushToHistory(const size_t sortedMapKeyIndex, const size_t vecMIndex,
+                                     const size_t vecMPrimeIndex) {
         unmappedVecIndicesStack_.markMapping(vecMIndex, vecMPrimeIndex);
 
         // Push history like a stack so that recursive calls are aware of exactly which
@@ -393,10 +389,10 @@ struct RecursionContext {
                 // but with more than one unique solution.
                 //
                 // With this mapping of vecM[i] to vecMprime[j], the recursion below will
-                // advance the index i to map more vectors in vecM. This is the main step of
-                // moving down through the bins.
-
-                onMappingPlausible(sortedMapKeyIndex, i, j);
+                // use a different index i to map more vectors in vecM for this bin. This is the
+                // main step of moving down through the bins. The mapping must be marked to avoid
+                // vectors that are already being used.
+                markMappingAndPushToHistory(sortedMapKeyIndex, i, j);
                 const auto mappingResult = findSymplecticMatrixRecurse(
                     sortedMapKeyIndex, std::make_optional(systemSForPair),
                     std::make_optional(systemPPrimeQPrimeForPair), systemSRank);
@@ -407,8 +403,10 @@ struct RecursionContext {
                 // If we're here, then mapping this v from M to vMap from Mprime didn't work, so
                 // continue the loop and try to map v to another vector from Mprime with the same
                 // map key.
-                //
-                onMappingFailed(sortedMapKeyIndex, i, j);
+                // We'll also discard the system for this mapping and recopy the previous system
+                // from the start of this recursive call. Again, if the loop advances, it means
+                // another possible mapping is being tried.
+                unmarkMappingAndPopFromHistory(sortedMapKeyIndex, i, j);
             }
 
         skip_this_v:
@@ -440,6 +438,7 @@ findSymplecticMatrix(const size_t d, const size_t n, const std::complex<double>&
 
     s_numRecursiveCalls = 0;
 
+    /*
     std::random_device rd;
     std::mt19937 gen(rd());
     for (const auto& key : sortedKeys) {
@@ -453,6 +452,7 @@ findSymplecticMatrix(const size_t d, const size_t n, const std::complex<double>&
             std::ranges::shuffle(vecMprime->get(), gen);
         }
     }
+    */
 
     RecursionContext context{d, n, omega, M, M_p, Mprime_p, Mmap, Mprimemap, sortedKeys};
     return context.findSymplecticMatrix();

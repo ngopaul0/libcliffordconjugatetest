@@ -439,9 +439,8 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 
             if (isSymplecticTransformation(d, x0, x1, x2, x3)) {
                 // Let alpha_v = f_M(v) and beta_v = f_{M'}(v)
-                const auto& alphaV = M_p.get(v);
+
                 const size_t n_alphaV = n_v;
-                const auto& alphaVPrime = M_p.get(vPrime);
                 const size_t n_alphaVPrime = n_vPrime;
 
                 const auto& betaVCoord = applyTransformation(d, v, x0, x1, x2, x3);
@@ -449,18 +448,29 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                 const auto& betaVPrimeCoord = applyTransformation(d, vPrime, x0, x1, x2, x3);
                 const auto& betaVPrime = Mprime_p.get(betaVPrimeCoord);
 
-                const size_t n_betaV = histogramMprime.createPauliCoeff(betaV).n();
+                const auto betaVEntry = histogramMprime.getPauliCoeffIfInSameBin(betaV, vKey);
+                if (!betaVEntry) {
+                    continue;
+                }
+                const size_t n_betaV = betaVEntry->n();
                 // Get integer k such that alpha_v = omega^k beta_v
                 const size_t k = safeMod(n_alphaV - n_betaV, d);
 #ifndef NDEBUG
+                const auto& alphaV = M_p.get(v);
                 const double kTest = checkPhase(d, alphaV, betaV);
                 const size_t kRounded = std::lround(kTest);
                 assert(k == kRounded);
 #endif
-                const size_t n_betaVPrime = histogramMprime.createPauliCoeff(betaVPrime).n();
+                const auto betaVPrimeEntry =
+                    histogramMprime.getPauliCoeffIfInSameBin(betaVPrime, vPrimeKey);
+                if (!betaVPrimeEntry) {
+                    continue;
+                }
+                const size_t n_betaVPrime = betaVPrimeEntry->n();
                 // Get integer k' such that alpha'_v = omega^k' beta'_v
                 const size_t kPrime = safeMod(n_alphaVPrime - n_betaVPrime, d);
 #ifndef NDEBUG
+                const auto& alphaVPrime = M_p.get(vPrime);
                 const double kPrimeTest = checkPhase(d, alphaVPrime, betaVPrime);
                 const size_t kPrimeRounded = std::llround(kPrimeTest);
                 assert(kPrimeRounded == kPrime);

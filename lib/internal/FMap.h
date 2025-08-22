@@ -282,8 +282,11 @@ struct FMap {
         return it != map_.end() ? it->second : EMPTY_ENTRY;
     }
 
-    PauliCoeff createPauliCoeff(const std::complex<double>& value) const {
-        return PauliCoeff(d_, value, precisionFor_r_, precisionFor_x_);
+    std::optional<PauliCoeff> getPauliCoeffIfInSameBin(const std::complex<double>& value,
+                                                       const FMapKey& targetKey) const {
+        const auto pauliCoeff = PauliCoeff(d_, value, precisionFor_r_, precisionFor_x_);
+        const auto key = FMapKey(pauliCoeff, precisionFor_r_, precisionFor_x_);
+        return targetKey == key ? std::make_optional(pauliCoeff) : std::nullopt;
     }
 
     /**

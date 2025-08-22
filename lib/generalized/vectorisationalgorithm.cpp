@@ -473,7 +473,6 @@ findSymplecticMatrix(const size_t d, const size_t n, const std::complex<double>&
 
     s_numRecursiveCalls = 0;
 
-    /*
     std::random_device rd;
     std::mt19937 gen(rd());
     for (const auto& key : sortedKeys) {
@@ -487,7 +486,6 @@ findSymplecticMatrix(const size_t d, const size_t n, const std::complex<double>&
             std::ranges::shuffle(vecMprime->get(), gen);
         }
     }
-    */
 
     RecursionContext context{d, n, omega, M, M_p, Mprime_p, Mmap, Mprimemap, sortedKeys};
     return context.findSymplecticMatrix();

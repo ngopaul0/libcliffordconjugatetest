@@ -61,60 +61,60 @@ struct RecursionContext {
      */
     MappingHistory history_ = MappingHistory(Mmap_.size());
 
-    class UnmappedVecIndicesStack {
+    class MappedVecIndicesStack {
         static constexpr size_t MAX_SIZE_FOR_BITSET = 127;
-        struct UnmappedIndicesLarge {
-            std::vector<bool> unmappedVecMIndices_;
-            std::vector<bool> unmappedVecMprimeIndices_;
-            explicit UnmappedIndicesLarge(const size_t numVecs)
-                : unmappedVecMIndices_(numVecs, true), unmappedVecMprimeIndices_(numVecs, true) {}
+        struct MappedIndicesLarge {
+            std::vector<bool> mappedVecMIndices_;
+            std::vector<bool> mappedVecMprimeIndices_;
+            explicit MappedIndicesLarge(const size_t numVecs)
+                : mappedVecMIndices_(numVecs, false), mappedVecMprimeIndices_(numVecs, false) {}
         };
 
-        struct UnmappedIndicesSmall {
-            std::bitset<1 + MAX_SIZE_FOR_BITSET> unmappedVecMIndices_;
-            std::bitset<1 + MAX_SIZE_FOR_BITSET> unmappedVecMprimeIndices_;
-            explicit UnmappedIndicesSmall() {
-                unmappedVecMIndices_.set();
-                unmappedVecMprimeIndices_.set();
+        struct MappedIndicesSmall {
+            std::bitset<1 + MAX_SIZE_FOR_BITSET> mappedVecMIndices_;
+            std::bitset<1 + MAX_SIZE_FOR_BITSET> mappedVecMprimeIndices_;
+            explicit MappedIndicesSmall() {
+                mappedVecMIndices_.reset();
+                mappedVecMprimeIndices_.reset();
             }
         };
 
-        std::stack<std::variant<UnmappedIndicesSmall, UnmappedIndicesLarge>> unmappedIndicesStack_;
+        std::stack<std::variant<MappedIndicesSmall, MappedIndicesLarge>> unmappedIndicesStack_;
 
       public:
         void push(const size_t numVecs) {
             if (numVecs > MAX_SIZE_FOR_BITSET) {
-                unmappedIndicesStack_.emplace(UnmappedIndicesLarge(numVecs));
+                unmappedIndicesStack_.emplace(MappedIndicesLarge(numVecs));
             } else {
-                unmappedIndicesStack_.emplace(UnmappedIndicesSmall());
+                unmappedIndicesStack_.emplace(MappedIndicesSmall());
             }
         }
 
         void pop() { unmappedIndicesStack_.pop(); }
 
-        [[nodiscard]] bool isIndexAllowedVecM(const size_t idx) const {
+        [[nodiscard]] bool isVecMIndexMapped(const size_t idx) const {
             const auto& top = unmappedIndicesStack_.top();
             return std::visit(
                 [idx]<typename T0>(T0&& arg) -> bool {
                     using T = std::decay_t<T0>;
-                    if constexpr (std::is_same_v<T, UnmappedIndicesLarge>) {
-                        return arg.unmappedVecMIndices_[idx];
+                    if constexpr (std::is_same_v<T, MappedIndicesLarge>) {
+                        return arg.mappedVecMIndices_[idx];
                     } else {
-                        return arg.unmappedVecMIndices_.test(idx);
+                        return arg.mappedVecMIndices_.test(idx);
                     }
                 },
                 top);
         }
 
-        [[nodiscard]] bool isIndexAllowedVecMprime(const size_t idx) const {
+        [[nodiscard]] bool isVecMprimeIndexMapped(const size_t idx) const {
             const auto& top = unmappedIndicesStack_.top();
             return std::visit(
                 [idx]<typename T0>(T0&& arg) -> bool {
                     using T = std::decay_t<T0>;
-                    if constexpr (std::is_same_v<T, UnmappedIndicesLarge>) {
-                        return arg.unmappedVecMprimeIndices_[idx];
+                    if constexpr (std::is_same_v<T, MappedIndicesLarge>) {
+                        return arg.mappedVecMprimeIndices_[idx];
                     } else {
-                        return arg.unmappedVecMprimeIndices_.test(idx);
+                        return arg.mappedVecMprimeIndices_.test(idx);
                     }
                 },
                 top);
@@ -125,12 +125,12 @@ struct RecursionContext {
             std::visit(
                 [vecMIndex, vecMPrimeIndex]<typename T0>(T0&& arg) -> void {
                     using T = std::decay_t<T0>;
-                    if constexpr (std::is_same_v<T, UnmappedIndicesLarge>) {
-                        arg.unmappedVecMIndices_[vecMIndex] = false;
-                        arg.unmappedVecMprimeIndices_[vecMPrimeIndex] = false;
+                    if constexpr (std::is_same_v<T, MappedIndicesLarge>) {
+                        arg.mappedVecMIndices_[vecMIndex] = true;
+                        arg.mappedVecMprimeIndices_[vecMPrimeIndex] = true;
                     } else {
-                        arg.unmappedVecMIndices_.reset(vecMIndex);
-                        arg.unmappedVecMprimeIndices_.reset(vecMPrimeIndex);
+                        arg.mappedVecMIndices_.set(vecMIndex);
+                        arg.mappedVecMprimeIndices_.set(vecMPrimeIndex);
                     }
                 },
                 top);
@@ -141,12 +141,12 @@ struct RecursionContext {
             std::visit(
                 [vecMIndex, vecMPrimeIndex]<typename T0>(T0&& arg) -> void {
                     using T = std::decay_t<T0>;
-                    if constexpr (std::is_same_v<T, UnmappedIndicesLarge>) {
-                        arg.unmappedVecMIndices_[vecMIndex] = true;
-                        arg.unmappedVecMprimeIndices_[vecMPrimeIndex] = true;
+                    if constexpr (std::is_same_v<T, MappedIndicesLarge>) {
+                        arg.mappedVecMIndices_[vecMIndex] = false;
+                        arg.mappedVecMprimeIndices_[vecMPrimeIndex] = false;
                     } else {
-                        arg.unmappedVecMIndices_.set(vecMIndex);
-                        arg.unmappedVecMprimeIndices_.set(vecMPrimeIndex);
+                        arg.mappedVecMIndices_.reset(vecMIndex);
+                        arg.mappedVecMprimeIndices_.reset(vecMPrimeIndex);
                     }
                 },
                 top);
@@ -154,10 +154,11 @@ struct RecursionContext {
     };
 
     /**
-     * Stores information about which vectors in MMap and MprimeMap are unmapped.
+     * Stores information about which vectors in MMap and MprimeMap are mapped already.
      * Vectors are considered mapped if they're in the system.
+     * The stack is by the bin that is currently being examined. Each bin will have its own stack.
      */
-    UnmappedVecIndicesStack unmappedVecIndicesStack_;
+    MappedVecIndicesStack mappedVecIndicesStack_;
 
     [[nodiscard]] std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>>
     findSymplecticMatrix() {
@@ -174,7 +175,7 @@ struct RecursionContext {
     void pushNewUnmappedIndices(const size_t sortedKeysIndex) {
         const auto& key = sortedKeys_[sortedKeysIndex];
         const auto& vecsM = Mmap_.get(key);
-        unmappedVecIndicesStack_.push(vecsM.size());
+        mappedVecIndicesStack_.push(vecsM.size());
     }
 
     bool areConstantMultiples(const MatrixCoordinate& v1, const MatrixCoordinate& v2) const {
@@ -230,7 +231,7 @@ struct RecursionContext {
 
     void unmarkMappingAndPopFromHistory(const size_t sortedMapKeyIndex, const size_t vecMIndex,
                                         const size_t vecMPrimeIndex) {
-        unmappedVecIndicesStack_.unmarkMapping(vecMIndex, vecMPrimeIndex);
+        mappedVecIndicesStack_.unmarkMapping(vecMIndex, vecMPrimeIndex);
         // Since the mapping did not work, do not use this mapping in the history. Pop
         // history off like a stack.
         if (const size_t countRemoved = history_[sortedMapKeyIndex].erase(vecMIndex);
@@ -240,7 +241,7 @@ struct RecursionContext {
     }
     void markMappingAndPushToHistory(const size_t sortedMapKeyIndex, const size_t vecMIndex,
                                      const size_t vecMPrimeIndex) {
-        unmappedVecIndicesStack_.markMapping(vecMIndex, vecMPrimeIndex);
+        mappedVecIndicesStack_.markMapping(vecMIndex, vecMPrimeIndex);
 
         // Push history like a stack so that recursive calls are aware of exactly which
         // vectors we have mapped already. As S is a permutation, a one-to-one
@@ -287,7 +288,7 @@ struct RecursionContext {
         // If a mapping is plausible (i.e. the systems are consistent), a recursive call is made
         // try to map the other vectors.
         for (size_t i = 0; i < vecsM.size(); ++i) {
-            if (!unmappedVecIndicesStack_.isIndexAllowedVecM(i)) {
+            if (mappedVecIndicesStack_.isVecMIndexMapped(i)) {
                 continue;
             }
             if (shouldSkipThisVecMKey(sortedMapKeyIndex, i)) {
@@ -299,7 +300,7 @@ struct RecursionContext {
             // If this inner loop continues, that means that particular mapping failed, and the
             // next iteration is looking at another mapping possibility.
             for (size_t j = 0; j < vecsMprime.size(); ++j) {
-                if (!unmappedVecIndicesStack_.isIndexAllowedVecMprime(j)) {
+                if (mappedVecIndicesStack_.isVecMprimeIndexMapped(j)) {
                     continue;
                 }
                 if (shouldSkipThisVecMKey(sortedMapKeyIndex, i)) {
@@ -411,6 +412,11 @@ struct RecursionContext {
             }
         }
 
+        // Single-element bins have a single, direct mapping. If we got here, then we've failed.
+        if (vecsM.size() == 1 && !mappedVecIndicesStack_.isVecMprimeIndexMapped(0)) {
+            return std::nullopt;
+        }
+
         // Advance the key index; unable to find in current bin
         const size_t newSortedKeysIndex = sortedMapKeyIndex + 1;
         if (newSortedKeysIndex > maxKeyIndex_ || newSortedKeysIndex >= sortedKeys_.size()) {
@@ -421,7 +427,7 @@ struct RecursionContext {
         const auto resultWhenNextBinSearched =
             findSymplecticMatrixRecurse(newSortedKeysIndex, std::move(systemForS),
                                         std::move(systemForPPrimeQPrime), lastSystemSRank);
-        unmappedVecIndicesStack_.pop();
+        mappedVecIndicesStack_.pop();
         if (history_.contains(newSortedKeysIndex) && history_[newSortedKeysIndex].empty()) {
             history_.erase(newSortedKeysIndex);
         }

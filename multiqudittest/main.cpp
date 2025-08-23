@@ -10,7 +10,6 @@
 #include <chrono>
 #include <complex>
 #include "include/npy.hpp"
-#include <boost/histogram.hpp>
 
 #include "unsupported/Eigen/KroneckerProduct"
 #include "cliffordconjugacytest.hpp"
@@ -25,7 +24,6 @@
 static constexpr bool ENABLE_KEY_SHUFFLE = false;
 
 using namespace boost::accumulators;
-namespace bh = boost::histogram;
 
 Eigen::MatrixXcd computeMSumm(size_t d, const std::vector<std::pair<long, long>>& coords,
                               size_t inv_2, const std::complex<double>& omega) {
@@ -108,20 +106,6 @@ int main() {
     std::atomic_bool foundBad = false;
     std::atomic_size_t counter = INT_MAX;
     std::atomic_size_t totalGateCompleteCount = 0;
-
-
-    constexpr double start = 0.0;
-    constexpr double stop = 1000000;
-    constexpr double binWidth = 50.0;
-
-    // Number of bins = (stop - start) / bin_width
-    constexpr int bins = static_cast<int>((stop - start) / binWidth);  // 20,000 bins
-    // Define a histogram:
-    // - Axis from 0 to 1000000 milliseconds
-    // - 500 bins
-    auto hist = bh::make_histogram(
-        bh::axis::regular<>(bins, start, stop, "Milliseconds")
-    );
 
     accumulator_set<unsigned long long, stats<tag::mean, tag::variance, tag::min, tag::max, tag::count>>
         accMs;
@@ -220,7 +204,6 @@ int main() {
                 }
             }
             accMs(durationMs.count());
-            hist(durationMs.count());
         }
 #if ENABLE_OPENMP_MULTITHREADING
         if (takesVeryLong || counter > counterThresholdForPrintAndHistogramWrite || totalGateCompleteCount == numMatrices - 1) {
@@ -261,7 +244,6 @@ int main() {
             std::cout << "Max: " << max(accMsCopy) << std::endl;
             std::cout << "Standard Deviation: " << std::sqrt(variance(accMsCopy)) << std::endl;
             if (!takesVeryLong) {
-
 #pragma omp critical(resultWriting)
                 {
                     if (std::ofstream resultFile(resultsFileName, std::ios::app); resultFile) {
@@ -285,30 +267,6 @@ int main() {
                         std::cerr << "Failed to open resultFile for writing\n";
                     }
                 }
-
-
-                decltype(hist) histCopy;
-#pragma omp critical
-                {
-                    histCopy = hist;
-                }
-
-                std::ofstream file("histogram-d3n2.csv");
-                if (!file) {
-                    std::cerr << "Failed to open file for writing\n";
-                }
-                // Write header
-                file << "Lower,Upper,Count\n";
-
-                for (auto&& bin : indexed(histCopy)) {
-                    double lower = bin.bin(0).lower();
-                    double upper = bin.bin(0).upper();
-                    int count = *bin;
-                    file << lower << "," << upper << "," << count << "\n";
-                }
-
-                file.close();
-                std::cout << "Histogram written to histogram.csv\n";
             }
         }
     }

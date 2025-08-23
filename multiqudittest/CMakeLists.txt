@@ -7,8 +7,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(libnpy)
 
-find_package(Boost REQUIRED)
-
 add_executable(multiqudittest main.cpp)
 
 include(../cmake/eigen3.cmake)

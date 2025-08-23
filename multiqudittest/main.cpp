@@ -11,7 +11,6 @@
 #include <complex>
 #include "include/npy.hpp"
 #include <boost/histogram.hpp>
-#include <sqlite_modern_cpp.h>
 
 #include "unsupported/Eigen/KroneckerProduct"
 #include "cliffordconjugacytest.hpp"
@@ -132,19 +131,13 @@ int main() {
     std::cout << "Running tests" << std::endl;
     const auto workStartTime = std::chrono::high_resolution_clock::now();
 
-    const auto resultsFileName = "results-" + std::to_string(workStartTime.time_since_epoch().count()) + ".db";
+    const auto resultsFileName = "results-" + std::to_string(workStartTime.time_since_epoch().count()) + ".csv";
     {
-        sqlite::database db(resultsFileName);
-
-        // Create table if not exists
-        db << "CREATE TABLE IF NOT EXISTS results (CliffordIndex INTEGER, DurationMicroS INTEGER);";
-        /*
         if (std::ofstream file(resultsFileName); file) {
             file << "CliffordIndex,DurationMicroS\n";
         } else {
             std::cerr << "Failed to open file for writing\n";
         }
-        */
     }
 
     constexpr size_t counterThresholdForPrintAndHistogramWrite = 2000;
@@ -271,34 +264,6 @@ int main() {
 
 #pragma omp critical(resultWriting)
                 {
-                    sqlite::database db(resultsFileName);
-                    try {
-                        db << "BEGIN;";
-                        const size_t thisLongestIndex = longestNonZeroRunEndIndex;
-                        const auto loopStart = i <= longestNonZeroRunEndIndex ? 0 : thisLongestIndex;
-                        size_t thisNonZeroRunIndex = 0;
-                        bool foundZero = false;
-                        for (size_t resultIdx = loopStart; resultIdx <= i; resultIdx++) {
-                            if (allResultsMicroSeconds[resultIdx] != 0) {
-                                if (!foundZero) {
-                                    thisNonZeroRunIndex = resultIdx;
-                                }
-                                db << "INSERT INTO results (CliffordIndex, DurationMicroS) VALUES (?, ?);"
-                                   << resultIdx
-                                   << allResultsMicroSeconds[resultIdx];
-                            } else {
-                                foundZero = true;
-                            }
-                        }
-                        longestNonZeroRunEndIndex = thisNonZeroRunIndex;
-                        std::cout << "Wrote results. longestNonZeroRunEndIndex = " << thisNonZeroRunIndex << std::endl;
-                        db << "COMMIT;";
-                    } catch (const std::exception &e) {
-                        db << "ROLLBACK;";
-                        throw;
-                    }
-                    /*
-
                     if (std::ofstream resultFile(resultsFileName, std::ios::app); resultFile) {
                         const size_t thisLongestIndex = longestNonZeroRunEndIndex;
                         const auto loopStart = i <= longestNonZeroRunEndIndex ? 0 : thisLongestIndex;
@@ -319,7 +284,6 @@ int main() {
                     } else {
                         std::cerr << "Failed to open resultFile for writing\n";
                     }
-                    */
                 }
 
 
@@ -353,27 +317,6 @@ int main() {
         std::cout << "Detected failures" << std::endl;
     } else {
         std::cerr << "Writing all results\n";
-
-        {
-            sqlite::database db(resultsFileName);
-            try {
-                db << "BEGIN;";
-                for (size_t resultIdx = 0; resultIdx < numMatrices; resultIdx++) {
-                    if (allResultsMicroSeconds[resultIdx] != 0) {
-                        db << "INSERT INTO results (CliffordIndex, DurationMicroS) VALUES (?, ?);"
-                           << resultIdx
-                           << allResultsMicroSeconds[resultIdx];
-                    }
-                }
-                db << "COMMIT;";
-                std::cerr << "Wrote all results\n";
-            } catch (const std::exception &e) {
-                db << "ROLLBACK;";
-                throw;
-            }
-        }
-
-        /*
         if (std::ofstream resultFile(resultsFileName, std::ios::app); resultFile) {
             for (size_t resultIdx = 0; resultIdx < numMatrices; resultIdx++) {
                 if (allResultsMicroSeconds[resultIdx] != 0) {
@@ -384,8 +327,6 @@ int main() {
         } else {
             std::cerr << "Failed to open resultFile for writing\n";
         }
-        */
-
         std::cout << "Verified all gates" << std::endl;
     }
 }

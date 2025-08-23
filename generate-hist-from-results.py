@@ -1,6 +1,5 @@
 import sys
 import pandas as pd
-import sqlite3
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -11,19 +10,17 @@ if len(sys.argv) < 2:
 filename = sys.argv[1]
 
 # Load CSV file
-#df = pd.read_csv(filename)
-#durations_micros = df['DurationMicroS']
-#durations = durations_micros / 1000
+df = pd.read_csv(filename)
 
-conn = sqlite3.connect(filename)
-# Read data into a pandas DataFrame
-df = pd.read_sql_query("SELECT DurationMicroS FROM results", conn)
-conn.close()
+duplicates_exist = df['CliffordIndex'].duplicated().any()
+
+
 
 # Convert microseconds to milliseconds
 durations = df['DurationMicroS'] / 1000.0
 
 # Compute statistics
+count = durations.shape[0]
 mean_val = durations.mean()
 std_val = durations.std()
 min_val = durations.min()
@@ -32,6 +29,11 @@ percentiles = np.percentile(durations, [25, 50, 75, 90, 95, 99])
 
 # Print statistics
 print(f"Statistics for 'DurationMicroS' from file, scaled to milliseconds: {filename}")
+print(f"Duplicates: {duplicates_exist}")
+if duplicates_exist:
+    duplicate_values = df['CliffordIndex'][df['CliffordIndex'].duplicated()].unique()
+    print(duplicate_values)
+print(f"Count: {count}")
 print(f"Mean: {mean_val:.3f}")
 print(f"Std Deviation: {std_val:.3f}")
 print(f"Min: {min_val}")

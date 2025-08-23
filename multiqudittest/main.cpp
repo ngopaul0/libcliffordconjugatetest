@@ -1,12 +1,4 @@
 #include <Eigen/Dense>
-#include <boost/accumulators/accumulators.hpp>
-#include <boost/accumulators/statistics/count.hpp>
-#include <boost/accumulators/statistics/extended_p_square.hpp>
-#include <boost/accumulators/statistics/max.hpp>
-#include <boost/accumulators/statistics/mean.hpp>
-#include <boost/accumulators/statistics/min.hpp>
-#include <boost/accumulators/statistics/stats.hpp>
-#include <boost/accumulators/statistics/variance.hpp>
 #include <chrono>
 #include <complex>
 #include "include/npy.hpp"
@@ -22,8 +14,6 @@
 #define ENABLE_OPENMP_MULTITHREADING 1
 
 static constexpr bool ENABLE_KEY_SHUFFLE = false;
-
-using namespace boost::accumulators;
 
 Eigen::MatrixXcd computeMSumm(size_t d, const std::vector<std::pair<long, long>>& coords,
                               size_t inv_2, const std::complex<double>& omega) {
@@ -107,10 +97,6 @@ int main() {
     std::atomic_size_t counter = INT_MAX;
     std::atomic_size_t totalGateCompleteCount = 0;
 
-    accumulator_set<unsigned long long, stats<tag::mean, tag::variance, tag::min, tag::max, tag::count>>
-        accMs;
-
-
     std::atomic<unsigned long long> totalDurationMicroS{0};
     std::cout << "Running tests" << std::endl;
     const auto workStartTime = std::chrono::high_resolution_clock::now();
@@ -129,6 +115,8 @@ int main() {
     std::vector<unsigned long long> allResultsMicroSeconds(numMatrices);
 
     std::atomic_size_t longestNonZeroRunEndIndex = 0;
+
+    unsigned long long longestTimeMs = 0;
 
 #if ENABLE_OPENMP_MULTITHREADING
 #pragma omp parallel for schedule(dynamic)
@@ -155,8 +143,6 @@ int main() {
         std::cout << ssgate.str() << std::endl;
 #endif
 
-
-
         Eigen::Matrix<std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> Mprime =
             C * M * C.adjoint();
         auto startTime = std::chrono::high_resolution_clock::now();
@@ -164,6 +150,7 @@ int main() {
         auto endTime = std::chrono::high_resolution_clock::now();
         auto durationMs =
             std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+
         auto durationMicroS =
             std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
         const auto durationToRecord = durationMicroS.count();
@@ -187,23 +174,18 @@ int main() {
         totalDurationMicroS +=
             std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
 
-
         bool takesVeryLong = false;
-#pragma omp critical
         {
-            if (durationMs.count() >= max(accMs)) {
+            const size_t thisGateCount = totalGateCompleteCount;
+            long long avgMicroS = thisGateCount > 0 ? totalDurationMicroS / thisGateCount : 0;
+            // not proper
+            if (durationMs.count() >= longestTimeMs - avgMicroS) {
                 takesVeryLong = true;
-            } else {
-
-                auto stdDev = std::sqrt(variance(accMs));
-                if (stdDev > 0) {
-                    auto mean = max(accMs);
-                    if (std::abs((max(accMs) - mean) / stdDev > 3)) {
-                        takesVeryLong = true;
-                    }
-                }
             }
-            accMs(durationMs.count());
+        }
+
+        if (durationMs.count() > longestTimeMs) {
+            longestTimeMs = durationMs.count();
         }
 #if ENABLE_OPENMP_MULTITHREADING
         if (takesVeryLong || counter > counterThresholdForPrintAndHistogramWrite || totalGateCompleteCount == numMatrices - 1) {
@@ -226,23 +208,14 @@ int main() {
             const long double estSLeft = estMsLeft / 1000.0;
             const long double estMinLeft = estSLeft / 60.0;
 
-            decltype(accMs) accMsCopy;
-            #pragma omp critical
-            {
-               accMsCopy = accMs;
-            }
-            const std::string startString = takesVeryLong ? "(LONG)" : "";
+
+            const std::string startString = takesVeryLong ? "(LONG) " : "";
 
             std::cout << startString << "Verified " << totalGateCompleteCount << " gates out of " << numMatrices
                       << " (i = " << i << " took " << durationNs << " / " << durationMs
                       << ", avg speed " << gatesPerMs
                       << " gates/ms, about " << estSLeft << " seconds / " << estMinLeft
                       << "min left)" << std::endl;
-            std::cout << "Mean: " << mean(accMsCopy) << std::endl;
-            std::cout << "Variance: " << variance(accMsCopy) << std::endl;
-            std::cout << "Min: " << min(accMsCopy) << std::endl;
-            std::cout << "Max: " << max(accMsCopy) << std::endl;
-            std::cout << "Standard Deviation: " << std::sqrt(variance(accMsCopy)) << std::endl;
             if (!takesVeryLong) {
 #pragma omp critical(resultWriting)
                 {

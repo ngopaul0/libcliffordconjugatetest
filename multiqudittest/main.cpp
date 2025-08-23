@@ -1,7 +1,17 @@
 #include <Eigen/Dense>
+#include <boost/accumulators/accumulators.hpp>
+#include <boost/accumulators/statistics/count.hpp>
+#include <boost/accumulators/statistics/extended_p_square.hpp>
+#include <boost/accumulators/statistics/max.hpp>
+#include <boost/accumulators/statistics/mean.hpp>
+#include <boost/accumulators/statistics/min.hpp>
+#include <boost/accumulators/statistics/stats.hpp>
+#include <boost/accumulators/statistics/variance.hpp>
 #include <chrono>
 #include <complex>
 #include "include/npy.hpp"
+#include <boost/histogram.hpp>
+#include <sqlite_modern_cpp.h>
 
 #include "unsupported/Eigen/KroneckerProduct"
 #include "cliffordconjugacytest.hpp"
@@ -10,6 +20,13 @@
 #include "internal/cliffordgates.h"
 #include "internal/complexexactrepr.h"
 #include "internal/util.h"
+
+#define ENABLE_OPENMP_MULTITHREADING 1
+
+static constexpr bool ENABLE_KEY_SHUFFLE = false;
+
+using namespace boost::accumulators;
+namespace bh = boost::histogram;
 
 Eigen::MatrixXcd computeMSumm(size_t d, const std::vector<std::pair<long, long>>& coords,
                               size_t inv_2, const std::complex<double>& omega) {
@@ -70,7 +87,7 @@ int main() {
     const long inv_2 = cliffconjtest::modInverse(2, d);
     const std::complex<double> omega =
         std::exp(std::complex<double>(0, 2.0 * cliffconjtest::pi / d));
-    /*
+
     const std::vector<std::pair<long, long>> coords1 = {{1, 2}, {0, 1}};
     const std::vector<std::pair<long, long>> coords2 = {{0, 0}};
 
@@ -82,7 +99,7 @@ int main() {
 
     const Eigen::MatrixXcd M1 = computeMSumm(d, coords1, inv_2, omega);
     const Eigen::MatrixXcd M2 = computeMSumm(d, coords2, inv_2, omega);
-    */
+
 
     // This example will currently fail at i = 7 without the early checks against error propagation
     // in checkPhase
@@ -92,11 +109,53 @@ int main() {
     std::atomic_bool foundBad = false;
     std::atomic_size_t counter = INT_MAX;
     std::atomic_size_t totalGateCompleteCount = 0;
+
+
+    constexpr double start = 0.0;
+    constexpr double stop = 1000000;
+    constexpr double binWidth = 50.0;
+
+    // Number of bins = (stop - start) / bin_width
+    constexpr int bins = static_cast<int>((stop - start) / binWidth);  // 20,000 bins
+    // Define a histogram:
+    // - Axis from 0 to 1000000 milliseconds
+    // - 500 bins
+    auto hist = bh::make_histogram(
+        bh::axis::regular<>(bins, start, stop, "Milliseconds")
+    );
+
+    accumulator_set<unsigned long long, stats<tag::mean, tag::variance, tag::min, tag::max, tag::count>>
+        accMs;
+
+
     std::atomic<unsigned long long> totalDurationMicroS{0};
     std::cout << "Running tests" << std::endl;
     const auto workStartTime = std::chrono::high_resolution_clock::now();
 
+    const auto resultsFileName = "results-" + std::to_string(workStartTime.time_since_epoch().count()) + ".db";
+    {
+        sqlite::database db(resultsFileName);
+
+        // Create table if not exists
+        db << "CREATE TABLE IF NOT EXISTS results (CliffordIndex INTEGER, DurationMicroS INTEGER);";
+        /*
+        if (std::ofstream file(resultsFileName); file) {
+            file << "CliffordIndex,DurationMicroS\n";
+        } else {
+            std::cerr << "Failed to open file for writing\n";
+        }
+        */
+    }
+
+    constexpr size_t counterThresholdForPrintAndHistogramWrite = 2000;
+
+    std::vector<unsigned long long> allResultsMicroSeconds(numMatrices);
+
+    std::atomic_size_t longestNonZeroRunEndIndex = 0;
+
+#if ENABLE_OPENMP_MULTITHREADING
 #pragma omp parallel for schedule(dynamic)
+#endif
     for (int i = 0; i < numMatrices; ++i) {
         if (foundBad) {
             continue;
@@ -110,12 +169,28 @@ int main() {
         // zero-copy operation; numpy also column major
         Eigen::Map<Eigen::Matrix<std::complex<double>, 9, 9>> C(data_ptr);
 
-        // std::cout << "Gate " << i << "\n" << C << std::endl;
+#if !ENABLE_OPENMP_MULTITHREADING
+        std::stringstream ssgate;
+        ssgate << "====" << std::endl;
+        ssgate << "Processing Gate i=" << i << ":"
+        << std::endl << getComplexMatrixExactRepo(C) << std::endl;
+        ssgate << "====" << std::endl;
+        std::cout << ssgate.str() << std::endl;
+#endif
+
+
+
         Eigen::Matrix<std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> Mprime =
             C * M * C.adjoint();
         auto startTime = std::chrono::high_resolution_clock::now();
-        const auto result = cliffconjtest::isCliffordConjugateGeneralized(d, n, M, Mprime);
+        const auto result = cliffconjtest::isCliffordConjugateGeneralized(d, n, M, Mprime, ENABLE_KEY_SHUFFLE);
         auto endTime = std::chrono::high_resolution_clock::now();
+        auto durationMs =
+            std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+        auto durationMicroS =
+            std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+        const auto durationToRecord = durationMicroS.count();
+        allResultsMicroSeconds[i] = durationToRecord == 0 ? 1 : durationToRecord;
         if (!result) {
             const auto timeSinceStart =
                 std::chrono::duration_cast<std::chrono::milliseconds>(endTime - workStartTime);
@@ -134,10 +209,34 @@ int main() {
         auto durationNs = std::chrono::duration_cast<std::chrono::nanoseconds>(endTime - startTime);
         totalDurationMicroS +=
             std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
-        auto durationMs =
-            std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
-        if (counter > 1000 || totalGateCompleteCount == numMatrices - 1) {
-            counter = 0;
+
+
+        bool takesVeryLong = false;
+#pragma omp critical
+        {
+            if (durationMs.count() >= max(accMs)) {
+                takesVeryLong = true;
+            } else {
+
+                auto stdDev = std::sqrt(variance(accMs));
+                if (stdDev > 0) {
+                    auto mean = max(accMs);
+                    if (std::abs((max(accMs) - mean) / stdDev > 3)) {
+                        takesVeryLong = true;
+                    }
+                }
+            }
+            accMs(durationMs.count());
+            hist(durationMs.count());
+        }
+#if ENABLE_OPENMP_MULTITHREADING
+        if (takesVeryLong || counter > counterThresholdForPrintAndHistogramWrite || totalGateCompleteCount == numMatrices - 1) {
+#else
+        {
+#endif
+            if (!takesVeryLong) {
+                counter = 0;
+            }
             const auto timeSinceStart =
                 std::chrono::duration_cast<std::chrono::milliseconds>(endTime - workStartTime);
             const size_t thisGateCount = totalGateCompleteCount;
@@ -150,17 +249,143 @@ int main() {
                 gatesPerMs > 0 ? (numMatrices - thisGateCount) / gatesPerMs : 0;
             const long double estSLeft = estMsLeft / 1000.0;
             const long double estMinLeft = estSLeft / 60.0;
-            std::cout << "Verified " << totalGateCompleteCount << " gates out of " << numMatrices
+
+            decltype(accMs) accMsCopy;
+            #pragma omp critical
+            {
+               accMsCopy = accMs;
+            }
+            const std::string startString = takesVeryLong ? "(LONG)" : "";
+
+            std::cout << startString << "Verified " << totalGateCompleteCount << " gates out of " << numMatrices
                       << " (i = " << i << " took " << durationNs << " / " << durationMs
-                      << ", avg micro seconds " << avgMicroS << ", avg speed " << gatesPerMs
+                      << ", avg speed " << gatesPerMs
                       << " gates/ms, about " << estSLeft << " seconds / " << estMinLeft
                       << "min left)" << std::endl;
+            std::cout << "Mean: " << mean(accMsCopy) << std::endl;
+            std::cout << "Variance: " << variance(accMsCopy) << std::endl;
+            std::cout << "Min: " << min(accMsCopy) << std::endl;
+            std::cout << "Max: " << max(accMsCopy) << std::endl;
+            std::cout << "Standard Deviation: " << std::sqrt(variance(accMsCopy)) << std::endl;
+            if (!takesVeryLong) {
+
+#pragma omp critical(resultWriting)
+                {
+                    sqlite::database db(resultsFileName);
+                    try {
+                        db << "BEGIN;";
+                        const size_t thisLongestIndex = longestNonZeroRunEndIndex;
+                        const auto loopStart = i <= longestNonZeroRunEndIndex ? 0 : thisLongestIndex;
+                        size_t thisNonZeroRunIndex = 0;
+                        bool foundZero = false;
+                        for (size_t resultIdx = loopStart; resultIdx <= i; resultIdx++) {
+                            if (allResultsMicroSeconds[resultIdx] != 0) {
+                                if (!foundZero) {
+                                    thisNonZeroRunIndex = resultIdx;
+                                }
+                                db << "INSERT INTO results (CliffordIndex, DurationMicroS) VALUES (?, ?);"
+                                   << resultIdx
+                                   << allResultsMicroSeconds[resultIdx];
+                            } else {
+                                foundZero = true;
+                            }
+                        }
+                        longestNonZeroRunEndIndex = thisNonZeroRunIndex;
+                        std::cout << "Wrote results. longestNonZeroRunEndIndex = " << thisNonZeroRunIndex << std::endl;
+                        db << "COMMIT;";
+                    } catch (const std::exception &e) {
+                        db << "ROLLBACK;";
+                        throw;
+                    }
+                    /*
+
+                    if (std::ofstream resultFile(resultsFileName, std::ios::app); resultFile) {
+                        const size_t thisLongestIndex = longestNonZeroRunEndIndex;
+                        const auto loopStart = i <= longestNonZeroRunEndIndex ? 0 : thisLongestIndex;
+                        size_t thisNonZeroRunIndex = 0;
+                        bool foundZero = false;
+                        for (size_t resultIdx = loopStart; resultIdx <= i; resultIdx++) {
+                            if (allResultsMicroSeconds[resultIdx] != 0) {
+                                if (!foundZero) {
+                                    thisNonZeroRunIndex = resultIdx;
+                                }
+                                resultFile << resultIdx << "," << allResultsMicroSeconds[resultIdx] << std::endl;
+                            } else {
+                                foundZero = true;
+                            }
+                        }
+                        longestNonZeroRunEndIndex = thisNonZeroRunIndex;
+                        std::cout << "Wrote results. longestNonZeroRunEndIndex = " << thisNonZeroRunIndex << std::endl;
+                    } else {
+                        std::cerr << "Failed to open resultFile for writing\n";
+                    }
+                    */
+                }
+
+
+                decltype(hist) histCopy;
+#pragma omp critical
+                {
+                    histCopy = hist;
+                }
+
+                std::ofstream file("histogram-d3n2.csv");
+                if (!file) {
+                    std::cerr << "Failed to open file for writing\n";
+                }
+                // Write header
+                file << "Lower,Upper,Count\n";
+
+                for (auto&& bin : indexed(histCopy)) {
+                    double lower = bin.bin(0).lower();
+                    double upper = bin.bin(0).upper();
+                    int count = *bin;
+                    file << lower << "," << upper << "," << count << "\n";
+                }
+
+                file.close();
+                std::cout << "Histogram written to histogram.csv\n";
+            }
         }
     }
 
     if (foundBad) {
         std::cout << "Detected failures" << std::endl;
     } else {
+        std::cerr << "Writing all results\n";
+
+        {
+            sqlite::database db(resultsFileName);
+            try {
+                db << "BEGIN;";
+                for (size_t resultIdx = 0; resultIdx < numMatrices; resultIdx++) {
+                    if (allResultsMicroSeconds[resultIdx] != 0) {
+                        db << "INSERT INTO results (CliffordIndex, DurationMicroS) VALUES (?, ?);"
+                           << resultIdx
+                           << allResultsMicroSeconds[resultIdx];
+                    }
+                }
+                db << "COMMIT;";
+                std::cerr << "Wrote all results\n";
+            } catch (const std::exception &e) {
+                db << "ROLLBACK;";
+                throw;
+            }
+        }
+
+        /*
+        if (std::ofstream resultFile(resultsFileName, std::ios::app); resultFile) {
+            for (size_t resultIdx = 0; resultIdx < numMatrices; resultIdx++) {
+                if (allResultsMicroSeconds[resultIdx] != 0) {
+                    resultFile << resultIdx << "," << allResultsMicroSeconds[resultIdx] << std::endl;
+                }
+            }
+            std::cerr << "Wrote all results\n";
+        } else {
+            std::cerr << "Failed to open resultFile for writing\n";
+        }
+        */
+
         std::cout << "Verified all gates" << std::endl;
     }
 }

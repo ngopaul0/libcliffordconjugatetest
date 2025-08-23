@@ -9,6 +9,16 @@ and run the conjugacy test on some hardcoded test matrix $M$.
 
 ## Requirements
 
+```
+# On macOS with Homebrew
+brew install boost sqlite
+
+# On Debian-based Linux systems
+sudo apt-get install libboost-all-dev libsqlite3-dev
+
+# On Windows, install Boost, SQLite3 via vcpkg
+```
+
 OpenMP is needed for multithreading. Windows and Linux usually has support for this (might need to install a package).
 
 Since all Clifford gates for $n = 2, d = 3$ are precreated and loaded, ~5.4 GB is needed for the Clifford gate file.

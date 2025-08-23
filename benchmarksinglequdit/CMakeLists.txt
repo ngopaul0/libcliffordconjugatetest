@@ -7,10 +7,10 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(Catch2)
 
-add_executable(benchmark CliffConjBenchmark.cpp)
+add_executable(benchmarksinglequdit CliffConjBenchmark.cpp)
 include(../cmake/eigen3.cmake)
 
-target_link_libraries(benchmark PRIVATE cliffordconjugatetest)
-target_link_libraries(benchmark PRIVATE Catch2::Catch2WithMain Eigen3::Eigen)
+target_link_libraries(benchmarksinglequdit PRIVATE cliffordconjugatetest)
+target_link_libraries(benchmarksinglequdit PRIVATE Catch2::Catch2WithMain Eigen3::Eigen)
 
 # catch_discover_tests(benchmark)

@@ -112,11 +112,16 @@ int main() {
 
     constexpr size_t counterThresholdForPrintAndHistogramWrite = 2000;
 
-    std::vector<unsigned long long> allResultsMicroSeconds(numMatrices);
+    struct Result {
+        unsigned long long ms;
+        bool isWritten;
+    };
+
+    std::vector<Result> allResultsMicroSeconds(numMatrices);
 
     std::atomic_size_t longestNonZeroRunEndIndex = 0;
 
-    unsigned long long longestTimeMs = 0;
+    std::atomic<unsigned long long> longestTimeMs = 0;
 
 #if ENABLE_OPENMP_MULTITHREADING
 #pragma omp parallel for schedule(dynamic)
@@ -154,7 +159,10 @@ int main() {
         auto durationMicroS =
             std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
         const auto durationToRecord = durationMicroS.count();
-        allResultsMicroSeconds[i] = durationToRecord == 0 ? 1 : durationToRecord;
+#pragma omp critical(resultWriting)
+        {
+            allResultsMicroSeconds[i].ms = durationToRecord == 0 ? 1 : durationToRecord;
+        }
         if (!result) {
             const auto timeSinceStart =
                 std::chrono::duration_cast<std::chrono::milliseconds>(endTime - workStartTime);
@@ -212,9 +220,13 @@ int main() {
             const std::string startString = takesVeryLong ? "(LONG) " : "";
 
             std::cout << startString << "Verified " << totalGateCompleteCount << " gates out of " << numMatrices
+                      << std::endl
                       << " (i = " << i << " took " << durationNs << " / " << durationMs
-                      << ", avg speed " << gatesPerMs
-                      << " gates/ms, about " << estSLeft << " seconds / " << estMinLeft
+                      << ", avgMicroS " << avgMicroS
+                      << ", avg speed " << gatesPerMs << " gates/ms"
+                      << ", max millis " << longestTimeMs
+                      << ", " << std::endl
+                      << " about " << estSLeft << " seconds / " << estMinLeft
                       << "min left)" << std::endl;
             if (!takesVeryLong) {
 #pragma omp critical(resultWriting)
@@ -225,11 +237,14 @@ int main() {
                         size_t thisNonZeroRunIndex = 0;
                         bool foundZero = false;
                         for (size_t resultIdx = loopStart; resultIdx <= i; resultIdx++) {
-                            if (allResultsMicroSeconds[resultIdx] != 0) {
+                            if (allResultsMicroSeconds[resultIdx].ms != 0) {
                                 if (!foundZero) {
                                     thisNonZeroRunIndex = resultIdx;
                                 }
-                                resultFile << resultIdx << "," << allResultsMicroSeconds[resultIdx] << std::endl;
+                                if (!allResultsMicroSeconds[resultIdx].isWritten) {
+                                    allResultsMicroSeconds[resultIdx].isWritten = true;
+                                    resultFile << resultIdx << "," << allResultsMicroSeconds[resultIdx].ms << std::endl;
+                                }
                             } else {
                                 foundZero = true;
                             }
@@ -250,8 +265,8 @@ int main() {
         std::cerr << "Writing all results\n";
         if (std::ofstream resultFile(resultsFileName, std::ios::app); resultFile) {
             for (size_t resultIdx = 0; resultIdx < numMatrices; resultIdx++) {
-                if (allResultsMicroSeconds[resultIdx] != 0) {
-                    resultFile << resultIdx << "," << allResultsMicroSeconds[resultIdx] << std::endl;
+                if (allResultsMicroSeconds[resultIdx].ms != 0 && !allResultsMicroSeconds[resultIdx].isWritten) {
+                    resultFile << resultIdx << "," << allResultsMicroSeconds[resultIdx].ms << std::endl;
                 }
             }
             std::cerr << "Wrote all results\n";

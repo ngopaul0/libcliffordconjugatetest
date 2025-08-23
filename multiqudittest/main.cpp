@@ -263,11 +263,10 @@ int main() {
         std::cout << "Detected failures" << std::endl;
     } else {
         std::cerr << "Writing all results\n";
-        if (std::ofstream resultFile(resultsFileName, std::ios::app); resultFile) {
+        if (std::ofstream resultFile(resultsFileName); resultFile) {
+            resultFile << "CliffordIndex,DurationMicroS\n";
             for (size_t resultIdx = 0; resultIdx < numMatrices; resultIdx++) {
-                if (allResultsMicroSeconds[resultIdx].ms != 0 && !allResultsMicroSeconds[resultIdx].isWritten) {
-                    resultFile << resultIdx << "," << allResultsMicroSeconds[resultIdx].ms << std::endl;
-                }
+                resultFile << resultIdx << "," << allResultsMicroSeconds[resultIdx].ms << std::endl;
             }
             std::cerr << "Wrote all results\n";
         } else {

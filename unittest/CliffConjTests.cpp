@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <complex>
+#include <random>
 
 #include <Eigen/Dense>
 #include "catch2/matchers/catch_matchers.hpp"
@@ -501,6 +502,42 @@ Eigen::MatrixXcd computeMSum(size_t d, std::vector<std::pair<long, long>> coords
 }
 
 TEST_CASE("Multi qudit case", "[multiqudit]") {
+    // Corresponds to the Clifford gate at index i=106092 from n2-c2-gates-d3-asGATES.npy
+    // with shuffle seed 13691651030999647805
+    SECTION("n = 2, d = 3, slow case", "[generalized][d=3][n=2]") {
+        const int d = 3;
+        const size_t n = 2;
+        const long inv_2 = modInverse(2, d);
+        const std::complex<double> omega =
+            std::exp(std::complex<double>(0, 2.0 * cliffconjtest::pi / d));
+
+        // This example will currently fail at i = 7 without the early checks against error propagation
+        // in checkPhase
+        const Eigen::MatrixXcd M = // Eigen::kroneckerProduct(M1, M2) + H
+            - std::sqrt(2) * Eigen::kroneckerProduct(cliffconjtest::W(d, 1, 3, inv_2, omega), cliffconjtest::W(d, 1, 3, inv_2, omega));
+
+        const std::mt19937::result_type seedVal = 13691651030999647805;
+
+        /*
+         Processing Gate i=106092, seed = 13691651030999647805:
+         */
+
+        Eigen::Matrix<std::complex<double>, 9, 9> C;
+        C << ComplexExactRepr(4599676419421066582,0).cmplx(), ComplexExactRepr(-4628199217061079722,-4624500108022500581).cmplx(), ComplexExactRepr(4599676419421066583,-4853630297885617527).cmplx(), ComplexExactRepr(-4628199217061079727,4598871928832275225).cmplx(), ComplexExactRepr(4599676419421066582,-4871321393266982593).cmplx(), ComplexExactRepr(-4628199217061079731,4598871928832275229).cmplx(), ComplexExactRepr(-4628199217061079727,4598871928832275230).cmplx(), ComplexExactRepr(4599676419421066583,-4853962019326894909).cmplx(), ComplexExactRepr(-4628199217061079731,4598871928832275230).cmplx(),
+        ComplexExactRepr(-4628199217061079727,4598871928832275230).cmplx(), ComplexExactRepr(4599676419421066583,-4853962019326894909).cmplx(), ComplexExactRepr(-4628199217061079731,4598871928832275230).cmplx(), ComplexExactRepr(4599676419421066582,0).cmplx(), ComplexExactRepr(-4628199217061079722,-4624500108022500581).cmplx(), ComplexExactRepr(4599676419421066583,-4853630297885617527).cmplx(), ComplexExactRepr(-4628199217061079727,4598871928832275225).cmplx(), ComplexExactRepr(4599676419421066582,-4871321393266982593).cmplx(), ComplexExactRepr(-4628199217061079731,4598871928832275229).cmplx(),
+        ComplexExactRepr(-4628199217061079727,4598871928832275225).cmplx(), ComplexExactRepr(4599676419421066582,-4871321393266982593).cmplx(), ComplexExactRepr(-4628199217061079731,4598871928832275229).cmplx(), ComplexExactRepr(-4628199217061079727,4598871928832275230).cmplx(), ComplexExactRepr(4599676419421066583,-4853962019326894909).cmplx(), ComplexExactRepr(-4628199217061079731,4598871928832275230).cmplx(), ComplexExactRepr(4599676419421066582,0).cmplx(), ComplexExactRepr(-4628199217061079722,-4624500108022500581).cmplx(), ComplexExactRepr(4599676419421066583,-4853630297885617527).cmplx(),
+        ComplexExactRepr(-4628199217061079727,4598871928832275230).cmplx(), ComplexExactRepr(-4628199217061079713,-4624500108022500581).cmplx(), ComplexExactRepr(-4628199217061079708,-4624500108022500586).cmplx(), ComplexExactRepr(4599676419421066582,0).cmplx(), ComplexExactRepr(-4628199217061079730,4598871928832275228).cmplx(), ComplexExactRepr(-4628199217061079734,4598871928832275232).cmplx(), ComplexExactRepr(-4628199217061079727,4598871928832275225).cmplx(), ComplexExactRepr(-4628199217061079718,-4624500108022500581).cmplx(), ComplexExactRepr(-4628199217061079710,-4624500108022500586).cmplx(),
+        ComplexExactRepr(-4628199217061079727,4598871928832275225).cmplx(), ComplexExactRepr(-4628199217061079718,-4624500108022500581).cmplx(), ComplexExactRepr(-4628199217061079710,-4624500108022500586).cmplx(), ComplexExactRepr(-4628199217061079727,4598871928832275230).cmplx(), ComplexExactRepr(-4628199217061079713,-4624500108022500581).cmplx(), ComplexExactRepr(-4628199217061079708,-4624500108022500586).cmplx(), ComplexExactRepr(4599676419421066582,0).cmplx(), ComplexExactRepr(-4628199217061079730,4598871928832275228).cmplx(), ComplexExactRepr(-4628199217061079734,4598871928832275232).cmplx(),
+        ComplexExactRepr(4599676419421066582,0).cmplx(), ComplexExactRepr(-4628199217061079730,4598871928832275228).cmplx(), ComplexExactRepr(-4628199217061079734,4598871928832275232).cmplx(), ComplexExactRepr(-4628199217061079727,4598871928832275225).cmplx(), ComplexExactRepr(-4628199217061079718,-4624500108022500581).cmplx(), ComplexExactRepr(-4628199217061079710,-4624500108022500586).cmplx(), ComplexExactRepr(-4628199217061079727,4598871928832275230).cmplx(), ComplexExactRepr(-4628199217061079713,-4624500108022500581).cmplx(), ComplexExactRepr(-4628199217061079708,-4624500108022500586).cmplx(),
+        ComplexExactRepr(-4628199217061079727,4598871928832275225).cmplx(), ComplexExactRepr(-4628199217061079731,4598871928832275231).cmplx(), ComplexExactRepr(4599676419421066578,-4842776974306836480).cmplx(), ComplexExactRepr(-4628199217061079727,4598871928832275230).cmplx(), ComplexExactRepr(-4628199217061079734,4598871928832275232).cmplx(), ComplexExactRepr(4599676419421066579,-4842495499330125824).cmplx(), ComplexExactRepr(4599676419421066582,0).cmplx(), ComplexExactRepr(4599676419421066579,-4848124998864338944).cmplx(), ComplexExactRepr(-4628199217061079702,-4624500108022500586).cmplx(),
+        ComplexExactRepr(4599676419421066582,0).cmplx(), ComplexExactRepr(4599676419421066579,-4848124998864338944).cmplx(), ComplexExactRepr(-4628199217061079702,-4624500108022500586).cmplx(), ComplexExactRepr(-4628199217061079727,4598871928832275225).cmplx(), ComplexExactRepr(-4628199217061079731,4598871928832275231).cmplx(), ComplexExactRepr(4599676419421066578,-4842776974306836480).cmplx(), ComplexExactRepr(-4628199217061079727,4598871928832275230).cmplx(), ComplexExactRepr(-4628199217061079734,4598871928832275232).cmplx(), ComplexExactRepr(4599676419421066579,-4842495499330125824).cmplx(),
+        ComplexExactRepr(-4628199217061079727,4598871928832275230).cmplx(), ComplexExactRepr(-4628199217061079734,4598871928832275232).cmplx(), ComplexExactRepr(4599676419421066579,-4842495499330125824).cmplx(), ComplexExactRepr(4599676419421066582,0).cmplx(), ComplexExactRepr(4599676419421066579,-4848124998864338944).cmplx(), ComplexExactRepr(-4628199217061079702,-4624500108022500586).cmplx(), ComplexExactRepr(-4628199217061079727,4598871928832275225).cmplx(), ComplexExactRepr(-4628199217061079731,4598871928832275231).cmplx(), ComplexExactRepr(4599676419421066578,-4842776974306836480).cmplx();
+
+        Eigen::Matrix<std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> Mprime = C * M * C.adjoint();
+
+        REQUIRE(isCliffordConjugateGeneralized(d, n, M, Mprime, std::make_optional(seedVal)));
+    }
+
     // Corresponds to the Clifford gate at index i=7 from n2-c2-gates-d3-asGATES.npy
     SECTION("d = 3, 2 qudits, 2nd failure from multiqudit test", "[generalized][d=3][n=2]") {
         Eigen::Matrix<std::complex<double>, 9, 9> roundedC;

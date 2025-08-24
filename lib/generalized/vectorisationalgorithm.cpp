@@ -6,6 +6,7 @@
 #include <random>
 #include <stack>
 #include <unordered_set>
+#include <variant>
 
 #include "internal/FMap.h"
 #include "internal/conjtestlemma10.h"
@@ -15,69 +16,8 @@ namespace cliffconjtest {
 using CliffPermutationSysMatrix = Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>;
 using PPrimeQPrimeSysMatrix = Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>;
 
-/**
- * Stores information about which vectors in a particular bin have been mapped.
- * The sets are indices for the vector of MatrixCoordinates inside of FMap.
- *
- * The info is stored as sets for O(1) access and modification. Information about a specific mapping
- * is not stored unless in a Debug build.
- */
-class BinMapping {
-    // could possibly optimize this with std::vector<bool> or std::bitset (fixed, compile-time size)
-    // for memory usage
-    std::unordered_set<size_t> mappedVecM_;
-    std::unordered_set<size_t> mappedVecMprime_;
-#ifndef NDEBUG
-    std::unordered_map<size_t, size_t> fullMapInfo_;
-#endif
-
-  public:
-    BinMapping() {}
-
-    bool isVecMIndexMapped(const size_t vecMIndex) const { return mappedVecM_.contains(vecMIndex); }
-
-    bool isVecMprimeIndexMapped(const size_t vecMPrimeIndex) const {
-        return mappedVecMprime_.contains(vecMPrimeIndex);
-    }
-
-    void markMapping(const size_t vecMIndex, const size_t vecMPrimeIndex) {
-        mappedVecM_.insert(vecMIndex);
-        mappedVecMprime_.insert(vecMPrimeIndex);
-#ifndef NDEBUG
-        fullMapInfo_[vecMIndex] = vecMPrimeIndex;
-#endif
-    }
-
-    void unmarkMapping(const size_t vecMIndex, const size_t vecMPrimeIndex) {
-        if (mappedVecM_.erase(vecMIndex) != 1) {
-            throw std::runtime_error("invalid map marking state");
-        };
-        if (mappedVecMprime_.erase(vecMPrimeIndex) != 1) {
-            throw std::runtime_error("invalid map marking state");
-        }
-#ifndef NDEBUG
-        if (fullMapInfo_.contains(vecMIndex)) {
-            fullMapInfo_.erase(vecMIndex);
-        }
-#endif
-    }
-
-    std::unordered_set<size_t> getMappedVecMIndices() const { return mappedVecM_; }
-
-    size_t size() const {
-        assert(mappedVecM_.size() == mappedVecMprime_.size());
-        return mappedVecM_.size();
-    }
-
-    bool empty() const {
-        assert(mappedVecM_.empty() == mappedVecMprime_.empty());
-        return mappedVecM_.empty();
-    }
-};
-
-// these could be space optimized since it's just a map using indices 0..Mmap.size().
-// A vector<BinMapping> could just as easily work
-using MappingHistory = std::unordered_map<size_t, BinMapping>;
+// Maps indices in sortedKeys to vector mapping by index
+using MappingHistory = std::unordered_map<size_t, std::unordered_map<size_t, size_t>>;
 using VecIndicesSetByKey = std::unordered_map<size_t, std::unordered_set<size_t>>;
 
 static size_t s_numRecursiveCalls = 0;
@@ -104,7 +44,7 @@ struct RecursionContext {
      * Modifiable and read across all recursive calls
      * Corresponds to the keys in Mmap_ that we are allowed to look at. The idea behind this is that
      * once the system for S is consistent with one unique solution, there's no need to look at
-     * other vectors in MNap, since there will be a basis in the vectors we're looking at.
+     * other vectors in MNap.
      */
     VecIndicesSetByKey allowedKeys_;
     /**
@@ -121,6 +61,105 @@ struct RecursionContext {
      */
     MappingHistory history_ = MappingHistory(Mmap_.size());
 
+    class MappedVecIndicesStack {
+        static constexpr size_t MAX_SIZE_FOR_BITSET = 127;
+        struct MappedIndicesLarge {
+            std::vector<bool> mappedVecMIndices_;
+            std::vector<bool> mappedVecMprimeIndices_;
+            explicit MappedIndicesLarge(const size_t numVecs)
+                : mappedVecMIndices_(numVecs, false), mappedVecMprimeIndices_(numVecs, false) {}
+        };
+
+        struct MappedIndicesSmall {
+            std::bitset<1 + MAX_SIZE_FOR_BITSET> mappedVecMIndices_;
+            std::bitset<1 + MAX_SIZE_FOR_BITSET> mappedVecMprimeIndices_;
+            explicit MappedIndicesSmall() {
+                mappedVecMIndices_.reset();
+                mappedVecMprimeIndices_.reset();
+            }
+        };
+
+        std::stack<std::variant<MappedIndicesSmall, MappedIndicesLarge>> unmappedIndicesStack_;
+
+      public:
+        void push(const size_t numVecs) {
+            if (numVecs > MAX_SIZE_FOR_BITSET) {
+                unmappedIndicesStack_.emplace(MappedIndicesLarge(numVecs));
+            } else {
+                unmappedIndicesStack_.emplace(MappedIndicesSmall());
+            }
+        }
+
+        void pop() { unmappedIndicesStack_.pop(); }
+
+        [[nodiscard]] bool isVecMIndexMapped(const size_t idx) const {
+            const auto& top = unmappedIndicesStack_.top();
+            return std::visit(
+                [idx]<typename T0>(T0&& arg) -> bool {
+                    using T = std::decay_t<T0>;
+                    if constexpr (std::is_same_v<T, MappedIndicesLarge>) {
+                        return arg.mappedVecMIndices_[idx];
+                    } else {
+                        return arg.mappedVecMIndices_.test(idx);
+                    }
+                },
+                top);
+        }
+
+        [[nodiscard]] bool isVecMprimeIndexMapped(const size_t idx) const {
+            const auto& top = unmappedIndicesStack_.top();
+            return std::visit(
+                [idx]<typename T0>(T0&& arg) -> bool {
+                    using T = std::decay_t<T0>;
+                    if constexpr (std::is_same_v<T, MappedIndicesLarge>) {
+                        return arg.mappedVecMprimeIndices_[idx];
+                    } else {
+                        return arg.mappedVecMprimeIndices_.test(idx);
+                    }
+                },
+                top);
+        }
+
+        void markMapping(const size_t vecMIndex, const size_t vecMPrimeIndex) {
+            auto& top = unmappedIndicesStack_.top();
+            std::visit(
+                [vecMIndex, vecMPrimeIndex]<typename T0>(T0&& arg) -> void {
+                    using T = std::decay_t<T0>;
+                    if constexpr (std::is_same_v<T, MappedIndicesLarge>) {
+                        arg.mappedVecMIndices_[vecMIndex] = true;
+                        arg.mappedVecMprimeIndices_[vecMPrimeIndex] = true;
+                    } else {
+                        arg.mappedVecMIndices_.set(vecMIndex);
+                        arg.mappedVecMprimeIndices_.set(vecMPrimeIndex);
+                    }
+                },
+                top);
+        }
+
+        void unmarkMapping(const size_t vecMIndex, const size_t vecMPrimeIndex) {
+            auto& top = unmappedIndicesStack_.top();
+            std::visit(
+                [vecMIndex, vecMPrimeIndex]<typename T0>(T0&& arg) -> void {
+                    using T = std::decay_t<T0>;
+                    if constexpr (std::is_same_v<T, MappedIndicesLarge>) {
+                        arg.mappedVecMIndices_[vecMIndex] = false;
+                        arg.mappedVecMprimeIndices_[vecMPrimeIndex] = false;
+                    } else {
+                        arg.mappedVecMIndices_.reset(vecMIndex);
+                        arg.mappedVecMprimeIndices_.reset(vecMPrimeIndex);
+                    }
+                },
+                top);
+        }
+    };
+
+    /**
+     * Stores information about which vectors in MMap and MprimeMap are mapped already.
+     * Vectors are considered mapped if they're in the system.
+     * The stack is by the bin that is currently being examined. Each bin will have its own stack.
+     */
+    MappedVecIndicesStack mappedVecIndicesStack_;
+
     [[nodiscard]] std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>>
     findSymplecticMatrix() {
         if (sortedKeys_.empty()) {
@@ -128,10 +167,17 @@ struct RecursionContext {
         }
 
         constexpr size_t sortedKeysStartIndex = 0;
+        pushNewUnmappedIndices(sortedKeysStartIndex);
         return findSymplecticMatrixRecurse(sortedKeysStartIndex);
     }
 
   private:
+    void pushNewUnmappedIndices(const size_t sortedKeysIndex) {
+        const auto& key = sortedKeys_[sortedKeysIndex];
+        const auto& vecsM = Mmap_.get(key);
+        mappedVecIndicesStack_.push(vecsM.size());
+    }
+
     bool areConstantMultiples(const MatrixCoordinate& v1, const MatrixCoordinate& v2) const {
         // Find the first non-zero element in v2 modulo d
         Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> M(v1.rows(), 2);
@@ -141,10 +187,10 @@ struct RecursionContext {
     }
 
     bool isHistoryContainingLinearlyDependentVector(const MatrixCoordinate& v1) {
-        for (const auto& [index, binMapping] : history_) {
+        for (const auto& [index, mapForIndex] : history_) {
             const auto& key = sortedKeys_[index];
             const auto& vecsM = Mmap_.get(key);
-            for (const auto& vInd : binMapping.getMappedVecMIndices()) {
+            for (const auto& vInd : mapForIndex | std::views::keys) {
                 const MatrixCoordinate& v2 = vecsM[vInd];
                 assert(v1 != v2 && "vector we're trying to search shouldn't in history");
                 if (areConstantMultiples(v1, v2)) {
@@ -158,8 +204,8 @@ struct RecursionContext {
     void useHistoryToFillAllowedKeysIfNeeded(const size_t lastKeyIndex, const size_t i) {
         if (allowedKeys_.empty()) {
             allowedKeys_[lastKeyIndex].insert(i);
-            for (const auto& [key, binMapping] : history_) {
-                for (const auto& vInd : binMapping.getMappedVecMIndices()) {
+            for (const auto& [key, mapForKey] : history_) {
+                for (const auto& vInd : mapForKey | std::views::keys) {
                     allowedKeys_[key].insert(vInd);
                 }
             }
@@ -185,20 +231,26 @@ struct RecursionContext {
 
     void unmarkMappingAndPopFromHistory(const size_t sortedMapKeyIndex, const size_t vecMIndex,
                                         const size_t vecMPrimeIndex) {
+        mappedVecIndicesStack_.unmarkMapping(vecMIndex, vecMPrimeIndex);
         // Since the mapping did not work, do not use this mapping in the history. Pop
         // history off like a stack.
 #ifndef NDEBUG
         const size_t sizeBefore = history_[sortedMapKeyIndex].size();
 #endif
-        history_[sortedMapKeyIndex].unmarkMapping(vecMIndex, vecMPrimeIndex);
+        if (const size_t countRemoved = history_[sortedMapKeyIndex].erase(vecMIndex);
+            countRemoved != 1) {
+            throw std::runtime_error("unexpected bad history state");
+        }
         assert(sizeBefore == history_[sortedMapKeyIndex].size() + 1);
     }
     void markMappingAndPushToHistory(const size_t sortedMapKeyIndex, const size_t vecMIndex,
                                      const size_t vecMPrimeIndex) {
+        mappedVecIndicesStack_.markMapping(vecMIndex, vecMPrimeIndex);
+
         // Push history like a stack so that recursive calls are aware of exactly which
         // vectors we have mapped already. As S is a permutation, a one-to-one
         // correspondence is necessary.
-        history_[sortedMapKeyIndex].markMapping(vecMIndex, vecMPrimeIndex);
+        history_[sortedMapKeyIndex][vecMIndex] = vecMPrimeIndex;
     }
     /**
      * Recursively finds a symplectic matrix S that satisfies Lemma 10. This is a backtracking
@@ -249,7 +301,7 @@ struct RecursionContext {
         // If a mapping is plausible (i.e. the systems are consistent), a recursive call is made
         // try to map the other vectors.
         for (size_t i = 0; i < vecsM.size(); ++i) {
-            if (history_[sortedMapKeyIndex].isVecMIndexMapped(i)) {
+            if (mappedVecIndicesStack_.isVecMIndexMapped(i)) {
                 continue;
             }
             if (shouldSkipThisVecMKey(sortedMapKeyIndex, i)) {
@@ -262,7 +314,7 @@ struct RecursionContext {
             // If this inner loop continues, that means that particular mapping failed, and the
             // next iteration is looking at another mapping possibility.
             for (size_t j = 0; j < vecsMprime.size(); ++j) {
-                if (history_[sortedMapKeyIndex].isVecMprimeIndexMapped(j)) {
+                if (mappedVecIndicesStack_.isVecMprimeIndexMapped(j)) {
                     continue;
                 }
                 if (shouldSkipThisVecMKey(sortedMapKeyIndex, i)) {
@@ -343,8 +395,7 @@ struct RecursionContext {
                         }
                         continue;
                     }
-                    // TODO: Update this with the better method for handling linear dependent
-                    // vectors
+                    // TODO: Update this with the better method for handling linear dependent vectors
                     if (systemSRank == lastSystemSRank) {
                         // System rank not changing means what we just added was just a multiple
                         // of some other row
@@ -371,12 +422,7 @@ struct RecursionContext {
                 // use a different index i to map more vectors in vecM for this bin. This is the
                 // main step of moving down through the bins. The mapping must be marked to avoid
                 // vectors that are already being used.
-                const size_t vecMIndex = i;
-                const size_t vecMPrimeIndex = j;
-                // Push history like a stack so that recursive calls are aware of exactly which
-                // vectors we have mapped already. As S is a permutation, a one-to-one
-                // correspondence is necessary.
-                history_[sortedMapKeyIndex].markMapping(vecMIndex, vecMPrimeIndex);
+                markMappingAndPushToHistory(sortedMapKeyIndex, i, j);
                 // RECURSION DIVE: Use this mapping and check the other vectors in this bin, or
                 // go on to the next bin.
                 const auto mappingResult = findSymplecticMatrixRecurse(
@@ -388,32 +434,29 @@ struct RecursionContext {
                 }
                 // If we're here, then mapping this v from M to vMap from Mprime didn't work, so
                 // continue the loop and try to map v to another vector from Mprime with the same
-                // map key
-                const size_t sizeBefore = history_[sortedMapKeyIndex].size();
-                history_[sortedMapKeyIndex].unmarkMapping(i, j);
-                assert(sizeBefore == history_[sortedMapKeyIndex].size() + 1);
+                // map key.
                 // We'll also discard the system for this mapping and recopy the previous system
                 // from the start of this recursive call. Again, if the loop advances, it means
                 // another possible mapping is being tried.
+                unmarkMappingAndPopFromHistory(sortedMapKeyIndex, i, j);
             }
         }
-    next_bin_key:
+        next_bin_key:
         // If we are here, then either all the vectors in this bin are already mapped to something,
         // (resulting in a loop exit)
         // or we tried all the mappings for vectors in vecM and failed and exited the loop.
 
         // Single-element bins have a single, direct mapping. If we got here, then we've failed.
-        if (vecsM.size() == 1 && !history_[sortedMapKeyIndex].isVecMIndexMapped(0)) {
+        if (vecsM.size() == 1 && !mappedVecIndicesStack_.isVecMIndexMapped(0)) {
             return std::nullopt;
         }
         if (!allowedKeys_.empty()) {
             // If the allowed keys are set, we should only be proceeding if at least one of those
             // keys are mapped to something.
             const auto& allowedVecMIndices = allowedKeys_[sortedMapKeyIndex];
-            const auto& binMapping = history_[sortedMapKeyIndex];
-            const bool isAtLeastOneAllowedVecBeingMapped =
-                std::ranges::any_of(allowedVecMIndices, [&](const size_t vecMIndex) -> bool {
-                    return binMapping.isVecMIndexMapped(vecMIndex);
+            const bool isAtLeastOneAllowedVecBeingMapped = std::ranges::any_of(allowedVecMIndices,
+                [&](const size_t vecMIndex) {
+                    return mappedVecIndicesStack_.isVecMIndexMapped(vecMIndex);
                 });
             if (!isAtLeastOneAllowedVecBeingMapped) {
                 return std::nullopt;
@@ -426,11 +469,12 @@ struct RecursionContext {
             // RECURSION END: There are no more points to check.
             return std::nullopt;
         }
+        pushNewUnmappedIndices(newSortedKeysIndex);
         // RECURSION DIVE: Check the next bin.
         const auto resultWhenNextBinSearched =
             findSymplecticMatrixRecurse(newSortedKeysIndex, std::move(systemForS),
                                         std::move(systemForPPrimeQPrime), lastSystemSRank);
-        // Cleanup history
+        mappedVecIndicesStack_.pop();
         if (history_.contains(newSortedKeysIndex) && history_[newSortedKeysIndex].empty()) {
             history_.erase(newSortedKeysIndex);
         }

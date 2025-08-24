@@ -191,57 +191,50 @@ int main(int argc, char** argv) {
     constexpr size_t counterThresholdForPrintAndHistogramWrite = 2000;
 
 #ifdef ENABLE_KEY_SHUFFLE
-
-
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<std::mt19937::result_type> distrib;
-
-
     std::vector<std::mt19937::result_type> seeds(numMatrices);
-
+    std::mt19937::result_type baseSeed;
     if (inputSeedFilename) {
-        std::cout << "Reading seeds from " << *inputSeedFilename << std::endl;
-        std::ifstream input_file(*inputSeedFilename, std::ios::binary);
+        std::cout << "Reading seed from " << *inputSeedFilename << std::endl;
+        std::ifstream inputFile(*inputSeedFilename, std::ios::binary);
         // Check if the file was opened successfully.
-        if (!input_file.is_open()) {
+        if (!inputFile.is_open()) {
             std::cerr << "Error opening file: " << *inputSeedFilename << std::endl;
             return 1;
         }
 
         // Read the size of the vector first.
-        size_t size = 0;
-        input_file.read(reinterpret_cast<char*>(&size), sizeof(size_t));
-        if (!input_file || size != seeds.size()) {
-            std::cerr << "bad seed list size" << std::endl;
+        baseSeed = 0;
+        inputFile.read(reinterpret_cast<char*>(&baseSeed), sizeof(std::mt19937::result_type));
+        if (!inputFile || baseSeed == 0) {
+            std::cerr << "failed to read a seed" << std::endl;
             return 1;
         }
-        input_file.read(reinterpret_cast<char*>(seeds.data()), seeds.size() * sizeof(std::mt19937::result_type));
 
-        if (!input_file) {
-            std::cerr << "Error reading data from file." << std::endl;
-            return 1;
-        }
-        std::cout << "Successfully read seeds. First 2 seeds are " << seeds[0] << ", " << seeds[1] << std::endl;
+        std::cout << "Successfully read baseSeed " << baseSeed << std::endl;
     } else {
-        std::cout << "Generating shuffle seeds for each Clifford\n";
-        for (size_t i = 0; i < numMatrices; i++) {
-            seeds[i] = distrib(gen);
+        std::random_device rd;
+        baseSeed = rd();
+
+        const auto seedFileName = "baseseed-" + std::to_string(startUnixEpochMs.count()) + ".bin";
+        std::cout << "Writing base seed " << baseSeed << " to " << seedFileName << std::endl;
+
+        if (std::ofstream file(seedFileName, std::ios::binary); file) {
+            file.write(reinterpret_cast<const char*>(&baseSeed), sizeof( std::mt19937::result_type));
+        } else {
+            std::cerr << "Failed to open base seed file for writing\n";
+            exit(1);
         }
-        const auto seedsFileName = "seeds-" + std::to_string(startUnixEpochMs.count()) + ".bin";
-        std::cout << "Finished generating shuffle seeds for each Clifford. Writing all seeds to " << seedsFileName << std::endl;
-        {
-            if (std::ofstream file(seedsFileName, std::ios::binary); file) {
-                const auto size = seeds.size();
-                file.write(reinterpret_cast<const char*>(&size), sizeof(size_t));
-                file.write(reinterpret_cast<const char*>(seeds.data()), size * sizeof(std::mt19937::result_type));
-            } else {
-                std::cerr << "Failed to open file for writing\n";
-                exit(1);
-            }
-            std::cout << "Wrote all seeds to " << seedsFileName << ". First 2 seeds are " << seeds[0] << ", " << seeds[1] << std::endl;
-        }
+        std::cout << "Wrote base seed " << baseSeed << " to " << seedFileName << std::endl;
     }
+    std::mt19937 gen(baseSeed);
+    std::uniform_int_distribution<std::mt19937::result_type> distrib;
+
+    for (size_t i = 0; i < numMatrices; i++) {
+        seeds[i] = distrib(gen);
+    }
+
+    std::cout << "Finished generating shuffle seeds for each Clifford (baseSeed=" << baseSeed
+        << "). First 2 seeds are " << seeds[0] << ", " << seeds[1] << std::endl;
 #endif
 
     struct Result {
@@ -271,10 +264,16 @@ int main(int argc, char** argv) {
         // zero-copy operation; numpy also column major
         Eigen::Map<Eigen::Matrix<std::complex<double>, 9, 9>> C(data_ptr);
 
+#ifdef ENABLE_KEY_SHUFFLE
+        const auto seed = std::make_optional(seeds[i]);
+#else
+        const auto seed = std::nullopt;
+#endif
+
 #if !ENABLE_OPENMP_MULTITHREADING
         std::stringstream ssgate;
         ssgate << "====" << std::endl;
-        ssgate << "Processing Gate i=" << i << ":"
+        ssgate << "Processing Gate i=" << i << ", seed = " << seed.value_or(0) << ":"
         << std::endl << getComplexMatrixExactRepo(C) << std::endl;
         ssgate << "====" << std::endl;
         std::cout << ssgate.str() << std::endl;
@@ -282,11 +281,6 @@ int main(int argc, char** argv) {
 
         Eigen::Matrix<std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> Mprime =
             C * M * C.adjoint();
-#ifdef ENABLE_KEY_SHUFFLE
-        const auto seed = std::make_optional(seeds[i]);
-#else
-        const auto seed = std::nullopt;
-#endif
 
         auto startTime = std::chrono::high_resolution_clock::now();
         const auto result = cliffconjtest::isCliffordConjugateGeneralized(d, n, M, Mprime, seed);
@@ -338,7 +332,7 @@ int main(int argc, char** argv) {
 #if ENABLE_OPENMP_MULTITHREADING
         const bool shouldPrintOut = takesVeryLong || counter > counterThresholdForPrintAndHistogramWrite || totalGateCompleteCount == numMatrices - 1;
 #else
-        const bool shouldPrintOut = true;
+        constexpr bool shouldPrintOut = true;
 #endif
         if (shouldPrintOut) {
             if (!takesVeryLong) {
@@ -403,6 +397,7 @@ int main(int argc, char** argv) {
 
     if (foundBad) {
         std::cout << "Detected failures" << std::endl;
+        return 1;
     } else {
         std::cerr << "Writing all results\n";
         if (std::ofstream resultFile(resultsFileName); resultFile) {
@@ -415,5 +410,6 @@ int main(int argc, char** argv) {
             std::cerr << "Failed to open resultFile for writing\n";
         }
         std::cout << "Verified all gates" << std::endl;
+        return 0;
     }
 }

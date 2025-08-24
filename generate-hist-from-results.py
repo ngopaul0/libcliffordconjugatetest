@@ -5,7 +5,7 @@ import numpy as np
 import csv
 import os
 
-use_log_scale = True
+use_log_scale = False
 max_val_filter = None
 num_bins = 100
 
@@ -69,9 +69,15 @@ print(f"90th percentile: {percentiles[3]}")
 print(f"95th percentile: {percentiles[4]}")
 print(f"99th percentile: {percentiles[5]}")
 
+
 outliers = df[df['DurationMicroS'] / 1000.0 > percentiles[5]]
-print(f"{outliers.shape[0]} outliers (> 99th percentile)")
+outliers = outliers.sort_values(by=['DurationMicroS'], ascending=True, inplace=False)
+print(f"{outliers.shape[0]} outliers in unfiltered dataset (> 99th percentile)")
 print(outliers)
+if outliers.shape[0] > 0:
+    basename_noext = os.path.splitext(os.path.basename(filename))[0]
+    outliers.to_csv(f"{basename_noext}-outliers.csv", index=False)
+    print(f"Wrote to {basename_noext}-outliers.csv")
 
 if use_log_scale:
     bins = np.logspace(np.log10(durations.min()), np.log10(durations.max()), num_bins)

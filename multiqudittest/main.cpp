@@ -24,6 +24,7 @@
 #endif
 
 #include <random>
+#include <unordered_set>
 
 #include "include/npy.hpp"
 
@@ -35,8 +36,10 @@
 #include "internal/complexexactrepr.h"
 #include "internal/util.h"
 
-#define ENABLE_OPENMP_MULTITHREADING 1
+#define ENABLE_OPENMP_MULTITHREADING 0
 #define ENABLE_KEY_SHUFFLE 1
+
+constexpr std::optional<size_t> customStartIndex = std::nullopt;
 
 constexpr size_t counterThresholdForPrintAndHistogramWrite = 50000;
 
@@ -115,13 +118,61 @@ std::string getComplexMatrixExactRepo(const MatrixType& M) {
     return ss.str();
 }
 
+std::optional<std::unordered_set<size_t>> getOutlierIndices(std::string& outliersFileName) {
+    std::ifstream inputFile(outliersFileName);
+    if (!inputFile.is_open()) {
+        std::cerr << "Error opening file: " << outliersFileName << std::endl;
+        return std::nullopt;
+    }
+
+    std::unordered_set<size_t> outlierIndices;
+    std::string line;
+
+    std::string headerLine;
+    std::getline(inputFile, headerLine);
+    if (headerLine != "CliffordIndex,DurationMicroS") {
+        std::cerr << "Bad header of " << headerLine << " in " << outliersFileName << std::endl;
+        return std::nullopt;
+    }
+
+    while (std::getline(inputFile, line)) {
+        std::stringstream ss(line);
+        std::string indexString;
+        // use , as delimiter
+        if (std::getline(ss, indexString, ',')) {
+            size_t index = std::stoul(indexString);
+            outlierIndices.insert(index);
+        }
+    }
+
+    return outlierIndices.empty() ? std::nullopt : std::make_optional(outlierIndices);
+}
+
 // Tests gates in C_2 (Clifford gates)
 int main(int argc, char** argv) {
     MaybeReenterWithoutASLR(argc, argv);
     std::optional<std::string> inputSeedFilename;
-    if (argc == 2) {
+    std::optional<std::string> outliersFilename;
+    if (argc > 2) {
         inputSeedFilename = std::make_optional(std::string(argv[1]));
         std::cout << "Detected seed file arg " << *inputSeedFilename << std::endl;
+        if (argc == 3) {
+            outliersFilename = std::make_optional(std::string(argv[2]));
+#if ENABLE_OPENMP_MULTITHREADING
+            static_assert(false && "Cannot use outliers and multithreading")
+#endif
+            std::cout << "Detected outliers file arg " << *outliersFilename << std::endl;
+        }
+    }
+
+    std::optional<std::unordered_set<size_t>> outlierIndices;
+    if (outliersFilename) {
+        outlierIndices = getOutlierIndices(*outliersFilename);
+        if (!outlierIndices) {
+            std::cout << "Failed to get outliers from " << *outliersFilename << std::endl;
+            return 1;
+        }
+        std::cout << "Outliers parsed: " << outlierIndices->size() << std::endl;
     }
 
     // Load data from .npy file
@@ -247,10 +298,24 @@ int main(int argc, char** argv) {
 
     std::atomic<unsigned long long> longestTimeMs = 0;
 
+    // constexpr size_t actualStartIndex = customStartIndex.value_or(0);
+
 #if ENABLE_OPENMP_MULTITHREADING
 #pragma omp parallel for schedule(dynamic)
 #endif
     for (int i = 0; i < numMatrices; ++i) {
+#if !ENABLE_OPENMP_MULTITHREADING
+        if (outlierIndices) {
+            if (outlierIndices->empty()) {
+                break;
+            }
+            if (!outlierIndices->contains(i)) {
+                continue;
+            }
+            outlierIndices->erase(i);
+        }
+#endif
+
         if (foundBad) {
             continue;
         }
@@ -361,6 +426,7 @@ int main(int argc, char** argv) {
                       << ", max millis " << longestTimeMs
                       << ", " << std::endl
                       << " bin shuffling: " << ENABLE_KEY_SHUFFLE
+                      << ", seed = " << seed.value_or(0)
                       << ", about " << estSLeft << " seconds / " << estMinLeft
                       << "min left)" << std::endl;
             if (!takesVeryLong) {
@@ -392,23 +458,32 @@ int main(int argc, char** argv) {
                 }
             }
         }
+
+        if (customStartIndex.has_value()) {
+            break;
+        }
     }
 
     if (foundBad) {
         std::cout << "Detected failures" << std::endl;
         return 1;
     } else {
-        std::cerr << "Writing all results\n";
-        if (std::ofstream resultFile(resultsFileName); resultFile) {
-            resultFile << "CliffordIndex,DurationMicroS\n";
-            for (size_t resultIdx = 0; resultIdx < numMatrices; resultIdx++) {
-                resultFile << resultIdx << "," << allResultsMicroSeconds[resultIdx].ms << std::endl;
+        if (!customStartIndex.has_value()) {
+            std::cerr << "Writing all results\n";
+            if (std::ofstream resultFile(resultsFileName); resultFile) {
+                resultFile << "CliffordIndex,DurationMicroS\n";
+                for (size_t resultIdx = 0; resultIdx < numMatrices; resultIdx++) {
+                    if (outlierIndices && allResultsMicroSeconds[resultIdx].ms == 0) {
+                        continue;
+                    }
+                    resultFile << resultIdx << "," << allResultsMicroSeconds[resultIdx].ms << std::endl;
+                }
+                std::cerr << "Wrote all results\n";
+            } else {
+                std::cerr << "Failed to open resultFile for writing\n";
             }
-            std::cerr << "Wrote all results\n";
-        } else {
-            std::cerr << "Failed to open resultFile for writing\n";
         }
-        std::cout << "Verified all gates" << std::endl;
+        std::cout << "Verified " << totalGateCompleteCount << "/" << numMatrices << " gates" << std::endl;
         return 0;
     }
 }

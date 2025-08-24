@@ -117,6 +117,11 @@ std::string getComplexMatrixExactRepo(const MatrixType& M) {
 // Tests gates in C_2 (Clifford gates)
 int main(int argc, char** argv) {
     MaybeReenterWithoutASLR(argc, argv);
+    std::optional<std::string> inputSeedFilename;
+    if (argc == 2) {
+        inputSeedFilename = std::make_optional(std::string(argv[1]));
+        std::cout << "Detected seed file arg " << *inputSeedFilename << std::endl;
+    }
 
     // Load data from .npy file
     std::cout << "Loading Clifford gates on two qudits (d=3)" << std::endl;
@@ -186,28 +191,56 @@ int main(int argc, char** argv) {
     constexpr size_t counterThresholdForPrintAndHistogramWrite = 2000;
 
 #ifdef ENABLE_KEY_SHUFFLE
+
+
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<std::mt19937::result_type> distrib;
 
-    std::cout << "Generating shuffle seeds for each Clifford\n";
+
     std::vector<std::mt19937::result_type> seeds(numMatrices);
-    for (size_t i = 0; i < numMatrices; i++) {
-        seeds[i] = distrib(gen);
-    }
-    const auto seedsFileName = "seeds-" + std::to_string(startUnixEpochMs.count()) + ".csv";
-    std::cout << "Finished generating shuffle seeds for each Clifford. Writing all seeds to " << seedsFileName << std::endl;
-    {
-        if (std::ofstream file(seedsFileName); file) {
-            file << "CliffordIndex,ShuffleSeed\n";
-            for (size_t i = 0; i < numMatrices; i++) {
-                file << i << "," << seeds[i] << std::endl;
-            }
-        } else {
-            std::cerr << "Failed to open file for writing\n";
-            exit(1);
+
+    if (inputSeedFilename) {
+        std::cout << "Reading seeds from " << *inputSeedFilename << std::endl;
+        std::ifstream input_file(*inputSeedFilename, std::ios::binary);
+        // Check if the file was opened successfully.
+        if (!input_file.is_open()) {
+            std::cerr << "Error opening file: " << *inputSeedFilename << std::endl;
+            return 1;
         }
-        std::cout << "Wrote all seeds to " << seedsFileName << std::endl;
+
+        // Read the size of the vector first.
+        size_t size = 0;
+        input_file.read(reinterpret_cast<char*>(&size), sizeof(size_t));
+        if (!input_file || size != seeds.size()) {
+            std::cerr << "bad seed list size" << std::endl;
+            return 1;
+        }
+        input_file.read(reinterpret_cast<char*>(seeds.data()), seeds.size() * sizeof(std::mt19937::result_type));
+
+        if (!input_file) {
+            std::cerr << "Error reading data from file." << std::endl;
+            return 1;
+        }
+        std::cout << "Successfully read seeds. First 2 seeds are " << seeds[0] << ", " << seeds[1] << std::endl;
+    } else {
+        std::cout << "Generating shuffle seeds for each Clifford\n";
+        for (size_t i = 0; i < numMatrices; i++) {
+            seeds[i] = distrib(gen);
+        }
+        const auto seedsFileName = "seeds-" + std::to_string(startUnixEpochMs.count()) + ".bin";
+        std::cout << "Finished generating shuffle seeds for each Clifford. Writing all seeds to " << seedsFileName << std::endl;
+        {
+            if (std::ofstream file(seedsFileName, std::ios::binary); file) {
+                const auto size = seeds.size();
+                file.write(reinterpret_cast<const char*>(&size), sizeof(size_t));
+                file.write(reinterpret_cast<const char*>(seeds.data()), size * sizeof(std::mt19937::result_type));
+            } else {
+                std::cerr << "Failed to open file for writing\n";
+                exit(1);
+            }
+            std::cout << "Wrote all seeds to " << seedsFileName << ". First 2 seeds are " << seeds[0] << ", " << seeds[1] << std::endl;
+        }
     }
 #endif
 

@@ -28,10 +28,20 @@ namespace cliffconjtest {
 bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
                          const Eigen::Ref<const Eigen::MatrixXcd>& M_prime);
 
+/**
+ *
+ * @param d
+ * @param n
+ * @param M
+ * @param M_prime
+ * @param shuffleSeed Seed for shuffling the bins. nullopt means no shuffling. A seed of 0 means
+ * use random_device (system-provided seed). By default, uses a system-provided seed
+ * @return
+ */
 bool isCliffordConjugateGeneralized(std::size_t d, std::size_t n,
                                     const Eigen::Ref<const Eigen::MatrixXcd>& M,
                                     const Eigen::Ref<const Eigen::MatrixXcd>& M_prime,
-                                    bool shuffleKeys = false);
+                                    const std::optional<std::uint_fast32_t>& shuffleSeed = std::make_optional(0));
 
 } // namespace cliffconjtest
 

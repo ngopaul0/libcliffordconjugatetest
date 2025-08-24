@@ -3,10 +3,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import csv
+import os
 
 use_log_scale = True
 max_val_filter = None
-num_bins = 50
+num_bins = 100
 
 sortCsv = False
 
@@ -68,6 +69,10 @@ print(f"90th percentile: {percentiles[3]}")
 print(f"95th percentile: {percentiles[4]}")
 print(f"99th percentile: {percentiles[5]}")
 
+outliers = df[df['DurationMicroS'] / 1000.0 > percentiles[5]]
+print(f"{outliers.shape[0]} outliers (> 99th percentile)")
+print(outliers)
+
 if use_log_scale:
     bins = np.logspace(np.log10(durations.min()), np.log10(durations.max()), num_bins)
 else:
@@ -85,6 +90,8 @@ plt.ylabel('Frequency')
 
 plt.title(f'Histogram for Clifford-conjugate test on M = W(p,q) for all Clifford (d=3, n=2){title_suffix}')
 plt.grid(True, linestyle='--', alpha=0.6)
-plt.savefig('histogram-d3n2-fromresults.png', dpi=300)
+
+image_name = f"{os.path.basename(filename)}.png"
+plt.savefig(image_name, dpi=300)
 
 plt.close()

@@ -66,10 +66,15 @@ void BM_CliffordConjugateTest(benchmark::State& state) {
     const Eigen::MatrixXcd C = W(d, 3, 4, inv_2, omega) * cliffordPermutationGate(d, 7);
     const Eigen::MatrixXcd Cstar = C.adjoint();
     Eigen::MatrixXcd M = C * Mprime * Cstar;
-    M(0, 3) += 0.2;
+    M(0, 2) += 0.2;
 
     for (auto _ : state) {
         bool result = isCliffordConjugateGeneralized(d, 1, M, Mprime);
+        if (result) {
+            const std::string failMsg = "Unexpected Clifford-conjugate failure (d = " + std::to_string(d) + ")";
+            state.SkipWithError(failMsg);
+            break; // REQUIRED to prevent all further iterations.
+        }
         benchmark::DoNotOptimize(result);
     }
     state.SetComplexityN(d);
@@ -125,9 +130,12 @@ void BM_CliffordConjugateTest2Qudits(benchmark::State& state) {
         C * M * C.adjoint();
 
     for (auto _ : state) {
+        state.PauseTiming();
         bool result = isCliffordConjugateGeneralized(d, n, M, Mprime);
         if (!result) {
-            throw std::runtime_error("Clifford conjugate generation failed for i = " + i);
+            const std::string failMsg = "Unexpected Clifford-conjugate failure (i = " + std::to_string(i) + ")";
+            state.SkipWithError(failMsg);
+            break; // REQUIRED to prevent all further iterations.
         }
         benchmark::DoNotOptimize(result);
     }
@@ -145,6 +153,8 @@ static void BM_SortComplexity(benchmark::State& state) {
 
 // Custom main function to register and run the benchmarks.
 int main(int argc, char** argv) {
+    benchmark::MaybeReenterWithoutASLR(argc, argv);
+
     {
         const auto& allCliffordGates = getCliffordGatesD3N2NumPyData();
         const size_t gateCount = allCliffordGates.shape[0];
@@ -163,8 +173,10 @@ int main(int argc, char** argv) {
     benchmark::RegisterBenchmark(
             "BM_CliffordConjugateTest2Qudits",
             BM_CliffordConjugateTest2Qudits)
-            ->Iterations(100)
-            ->Unit(benchmark::kMillisecond);
+            // ->Threads(32)
+            // ->Iterations(5000)
+            ->Unit(benchmark::kNanosecond);
+
 
     benchmark::RegisterBenchmark(
             "BM_CliffordConjugateTest",
@@ -180,16 +192,18 @@ int main(int argc, char** argv) {
             ->Complexity();
     //}
 
-
+    /*
     const char* custom_argv[] = {
         argv[0],
         //"--benchmark_report_aggregates_only=true",
         //"--benchmark_display_aggregates_only=true"
     };
     int custom_argc = std::size(custom_argv);
+    */
 
-    benchmark::Initialize(&custom_argc, const_cast<char**>(custom_argv));
+    benchmark::Initialize(&argc, argv);
     benchmark::RunSpecifiedBenchmarks();
 
+    benchmark::Shutdown();
     return 0;
 }

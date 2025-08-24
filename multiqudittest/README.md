@@ -29,6 +29,36 @@ so a CPU with more cores / threads will run faster.
 A better way could be to just write code to generate random a Clifford in C++, but listing out all Clifford gates
 allows us to check it for all possible Cliffords and with parallel algorithms.
 
+
+## Decreasing variance
+
+Adapted from https://github.com/google/benchmark/blob/main/docs/reducing_variance.md
+
+On Linux, try to disable CPU scaling to ensure CPU runs at a set frequency. To see available governors and current 
+governors, you can do
+
+```bash
+$ cpupower frequency-info -o proc
+```
+
+(can also read from `/sys/devices/system/cpu/cpu[0-N]/cpufreq/scaling_governor` ).
+
+Use the following to set to try to reduce variance (remember to set it back as this will take more voltage)
+
+```bash
+$ sudo cpupower frequency-set --governor performance
+```
+
+To see available governors
+
+```bash
+$ cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors
+conservative ondemand userspace powersave performance schedutil
+# Read a specific governer manually
+$ cat /sys/devices/system/cpu/cpu10/cpufreq/scaling_governor 
+schedutil
+```
+
 ## Running instructions
 
 The Clifford gates need to be pre-generated (code to generate arbitrary Cliffords not implemented in C++ yet).

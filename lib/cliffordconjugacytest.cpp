@@ -508,7 +508,7 @@ bool isCliffordConjugate(const Eigen::Ref<const Eigen::MatrixXcd>& M,
 bool isCliffordConjugateGeneralized(const std::size_t d, const std::size_t n,
                                     const Eigen::Ref<const Eigen::MatrixXcd>& M,
                                     const Eigen::Ref<const Eigen::MatrixXcd>& M_prime,
-                                    const bool shuffleKeys) {
+                                    const std::optional<unsigned long>& shuffleSeed) {
     constexpr double mapAbsValPrecision = 1e-5;
     constexpr double mapXPrecision = 1e-4;
 
@@ -561,7 +561,7 @@ bool isCliffordConjugateGeneralized(const std::size_t d, const std::size_t n,
         }
     }
 
-    return findSymplecticMatrix(d, n, omega, M, M_p, Mprime_p, MMap, MprimeMap, shuffleKeys)
+    return findSymplecticMatrix(d, n, omega, M, M_p, Mprime_p, MMap, MprimeMap, shuffleSeed)
         .has_value();
 }
 

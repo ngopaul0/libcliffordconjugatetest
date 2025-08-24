@@ -306,7 +306,7 @@ std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>>
 findSymplecticMatrix(size_t d, size_t n, const std::complex<double>& omega,
                      const Eigen::Ref<const Eigen::MatrixXcd>& M, const MpMatrixType& M_p,
                      const MpMatrixType& Mprime_p, FMap& Mmap, FMap& Mprimemap,
-                     bool shuffleKeys = true);
+                     const std::optional<std::uint_fast32_t>& shuffleSeed = std::make_optional(0));
 
 } // namespace cliffconjtest
 

@@ -1,6 +1,30 @@
+// get_as_unsigned and MaybeReenterWithoutASLR are from Google Benchmark
+// (https://github.com/google/benchmark). LICENSE notice for Google
+// Benchmark code:
+//
+// Copyright 2015 Google Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Eigen/Dense>
 #include <chrono>
 #include <complex>
+#ifdef __linux__
+#include <sys/personality.h>
+#endif
+
+#include <random>
+
 #include "include/npy.hpp"
 
 #include "unsupported/Eigen/KroneckerProduct"
@@ -13,7 +37,53 @@
 
 #define ENABLE_OPENMP_MULTITHREADING 1
 
-static constexpr bool ENABLE_KEY_SHUFFLE = false;
+#define ENABLE_KEY_SHUFFLE 1
+
+// From Google Benchmark
+template <typename T>
+std::make_unsigned_t<T> get_as_unsigned(T v) {
+    using UnsignedT = std::make_unsigned_t<T>;
+    return static_cast<UnsignedT>(v);
+}
+
+// From Google Benchmark
+// Try to disable ASLR (Address Space Layout Randomization) to prevent unreproducible noise
+void MaybeReenterWithoutASLR(int /*argc*/, char** argv) {
+    // On e.g. Hexagon simulator, argv may be NULL.
+    if (!argv) return;
+
+#ifdef __linux__
+    const auto curr_personality = personality(0xffffffff);
+
+    // We should never fail to read-only query the current personality,
+    // but let's be cautious.
+    if (curr_personality == -1) return;
+
+    // If ASLR is already disabled, we have nothing more to do.
+    if (get_as_unsigned(curr_personality) & ADDR_NO_RANDOMIZE) return;
+
+    // Try to change the personality to disable ASLR.
+    const auto proposed_personality =
+        get_as_unsigned(curr_personality) | ADDR_NO_RANDOMIZE;
+    const auto prev_personality = personality(proposed_personality);
+
+    // Have we failed to change the personality? That may happen.
+    if (prev_personality == -1) return;
+
+    // Make sure the parsona has been updated with the no-ASLR flag,
+    // otherwise we will try to reenter infinitely.
+    // This seems impossible, but can happen in some docker configurations.
+    const auto new_personality = personality(0xffffffff);
+    if ((get_as_unsigned(new_personality) & ADDR_NO_RANDOMIZE) == 0)
+        return;
+
+    execv(argv[0], argv);
+    // The exec() functions return only if an error has occurred,
+    // in which case we want to just continue as-is.
+#else
+    return;
+#endif
+}
 
 Eigen::MatrixXcd computeMSumm(size_t d, const std::vector<std::pair<long, long>>& coords,
                               size_t inv_2, const std::complex<double>& omega) {
@@ -44,8 +114,10 @@ std::string getComplexMatrixExactRepo(const MatrixType& M) {
     return ss.str();
 }
 
-// Tests gates in C_2 (Clifford gates
-int main() {
+// Tests gates in C_2 (Clifford gates)
+int main(int argc, char** argv) {
+    MaybeReenterWithoutASLR(argc, argv);
+
     // Load data from .npy file
     std::cout << "Loading Clifford gates on two qudits (d=3)" << std::endl;
     npy::npy_data data = npy::read_npy<std::complex<double>>("n2-c2-gates-d3-asGATES.npy");
@@ -58,13 +130,13 @@ int main() {
         throw std::runtime_error("Wrong array shape");
     }
     std::cout << shape[0] << " gates loaded" << std::endl;
+    std::cout << "Key shuffling: " << ENABLE_KEY_SHUFFLE;
     if (shape[1] != 9) {
         throw std::runtime_error("Wrong array dim");
     }
     if (shape[2] != 9) {
         throw std::runtime_error("Wrong array dim");
     }
-    // std::vector<Eigen::Matrix<std::complex<double>, 9, 9>> matrix_list;
 
     const size_t numMatrices = shape[0];
     const size_t matrixSize = shape[1] * shape[2];
@@ -101,7 +173,8 @@ int main() {
     std::cout << "Running tests" << std::endl;
     const auto workStartTime = std::chrono::high_resolution_clock::now();
 
-    const auto resultsFileName = "results-" + std::to_string(workStartTime.time_since_epoch().count()) + ".csv";
+    const auto startUnixEpochMs =  std::chrono::duration_cast<std::chrono::milliseconds>(workStartTime.time_since_epoch());
+    const auto resultsFileName = "results-" + std::to_string(startUnixEpochMs.count()) + ".csv";
     {
         if (std::ofstream file(resultsFileName); file) {
             file << "CliffordIndex,DurationMicroS\n";
@@ -111,6 +184,32 @@ int main() {
     }
 
     constexpr size_t counterThresholdForPrintAndHistogramWrite = 2000;
+
+#ifdef ENABLE_KEY_SHUFFLE
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<std::mt19937::result_type> distrib;
+
+    std::cout << "Generating shuffle seeds for each Clifford\n";
+    std::vector<std::mt19937::result_type> seeds(numMatrices);
+    for (size_t i = 0; i < numMatrices; i++) {
+        seeds[i] = distrib(gen);
+    }
+    const auto seedsFileName = "seeds-" + std::to_string(startUnixEpochMs.count()) + ".csv";
+    std::cout << "Finished generating shuffle seeds for each Clifford. Writing all seeds to " << seedsFileName << std::endl;
+    {
+        if (std::ofstream file(seedsFileName); file) {
+            file << "CliffordIndex,ShuffleSeed\n";
+            for (size_t i = 0; i < numMatrices; i++) {
+                file << i << "," << seeds[i] << std::endl;
+            }
+        } else {
+            std::cerr << "Failed to open file for writing\n";
+            exit(1);
+        }
+        std::cout << "Wrote all seeds to " << seedsFileName << std::endl;
+    }
+#endif
 
     struct Result {
         unsigned long long ms;
@@ -150,9 +249,16 @@ int main() {
 
         Eigen::Matrix<std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> Mprime =
             C * M * C.adjoint();
+#ifdef ENABLE_KEY_SHUFFLE
+        const auto seed = std::make_optional(seeds[i]);
+#else
+        const auto seed = std::nullopt;
+#endif
+
         auto startTime = std::chrono::high_resolution_clock::now();
-        const auto result = cliffconjtest::isCliffordConjugateGeneralized(d, n, M, Mprime, ENABLE_KEY_SHUFFLE);
+        const auto result = cliffconjtest::isCliffordConjugateGeneralized(d, n, M, Mprime, seed);
         auto endTime = std::chrono::high_resolution_clock::now();
+
         auto durationMs =
             std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
 
@@ -195,11 +301,13 @@ int main() {
         if (durationMs.count() > longestTimeMs) {
             longestTimeMs = durationMs.count();
         }
+
 #if ENABLE_OPENMP_MULTITHREADING
-        if (takesVeryLong || counter > counterThresholdForPrintAndHistogramWrite || totalGateCompleteCount == numMatrices - 1) {
+        const bool shouldPrintOut = takesVeryLong || counter > counterThresholdForPrintAndHistogramWrite || totalGateCompleteCount == numMatrices - 1;
 #else
-        {
+        const bool shouldPrintOut = true;
 #endif
+        if (shouldPrintOut) {
             if (!takesVeryLong) {
                 counter = 0;
             }
@@ -226,7 +334,8 @@ int main() {
                       << ", avg speed " << gatesPerMs << " gates/ms"
                       << ", max millis " << longestTimeMs
                       << ", " << std::endl
-                      << " about " << estSLeft << " seconds / " << estMinLeft
+                      << " bin shuffling: " << ENABLE_KEY_SHUFFLE
+                      << ", about " << estSLeft << " seconds / " << estMinLeft
                       << "min left)" << std::endl;
             if (!takesVeryLong) {
 #pragma omp critical(resultWriting)
@@ -250,7 +359,7 @@ int main() {
                             }
                         }
                         longestNonZeroRunEndIndex = thisNonZeroRunIndex;
-                        std::cout << "Wrote results. longestNonZeroRunEndIndex = " << thisNonZeroRunIndex << std::endl;
+                        std::cout << "Wrote results to " << resultsFileName <<". longestNonZeroRunEndIndex = " << thisNonZeroRunIndex << std::endl;
                     } else {
                         std::cerr << "Failed to open resultFile for writing\n";
                     }

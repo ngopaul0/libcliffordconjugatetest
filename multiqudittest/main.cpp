@@ -36,8 +36,9 @@
 #include "internal/util.h"
 
 #define ENABLE_OPENMP_MULTITHREADING 1
-
 #define ENABLE_KEY_SHUFFLE 1
+
+constexpr size_t counterThresholdForPrintAndHistogramWrite = 50000;
 
 // From Google Benchmark
 template <typename T>
@@ -187,8 +188,6 @@ int main(int argc, char** argv) {
             std::cerr << "Failed to open file for writing\n";
         }
     }
-
-    constexpr size_t counterThresholdForPrintAndHistogramWrite = 2000;
 
 #ifdef ENABLE_KEY_SHUFFLE
     std::vector<std::mt19937::result_type> seeds(numMatrices);

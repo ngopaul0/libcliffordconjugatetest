@@ -14,6 +14,13 @@
 
 using namespace cliffconjtest;
 
+TEST_CASE("Seed bit dropping") {
+    const std::mt19937::result_type originalSeedValue = 13691651030999647805;
+    const unsigned long seedValueUnsigned = originalSeedValue;
+    const std::uint_fast32_t finalSeedValue = seedValueUnsigned;
+    REQUIRE(originalSeedValue == finalSeedValue);
+}
+
 TEST_CASE("Equal matrices are Clifford-conjugate", "[equal]") {
     SECTION("Two identical matrices should be equal") {
         Eigen::Matrix2cd M;

@@ -5,8 +5,8 @@ import numpy as np
 import csv
 import os
 
-use_log_scale = False
-max_val_filter = None
+use_log_scale = True
+max_val_filter = 40
 num_bins = 100
 
 sortCsv = False

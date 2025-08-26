@@ -39,20 +39,20 @@ class RecursionContext {
     public:
 
     RecursionContext(const size_t d, const size_t n, const std::complex<double>& omega,
-                     const Eigen::Ref<const Eigen::MatrixXcd>& M, const MpMatrixType& M_p,
-                     const MpMatrixType& Mprime_p, const FMap& Mmap, const FMap& Mprimemap,
-                     const std::vector<FMapKey>& sortedKeys)
-        : d_(d), n_(n), omega_(omega), M_(M), M_p_(M_p), Mprime_p_(Mprime_p), Mmap_(Mmap), Mprimemap_(Mprimemap), sortedKeys_(sortedKeys) {
+                       const Eigen::Ref<const Eigen::MatrixXcd>& M, const MpMatrixType& M_p,
+                       const MpMatrixType& Mprime_p, const FMap& Mmap, const FMap& Mprimemap,
+                       const std::vector<FMapKey>& sortedKeys)
+          : d_(d), n_(n), omega_(omega), M_(M), M_p_(M_p), Mprime_p_(Mprime_p), Mmap_(Mmap),
+            Mprimemap_(Mprimemap), sortedKeys_(sortedKeys) {
 
-        omegaSymplecticForm_ = Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>::Zero(2 * n, 2 * n);
-        omegaSymplecticForm_.topRightCorner(n, n).setIdentity();
-        omegaSymplecticForm_.bottomLeftCorner(n, n).setIdentity();
-        omegaSymplecticForm_.bottomLeftCorner(n, n) *= static_cast<long>(d - 1);
+          omegaSymplecticForm_ =
+              Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>::Zero(2 * n, 2 * n);
+          omegaSymplecticForm_.topRightCorner(n, n).setIdentity();
+          omegaSymplecticForm_.bottomLeftCorner(n, n).setIdentity();
+          omegaSymplecticForm_.bottomLeftCorner(n, n) *= static_cast<long>(d - 1);
+      }
 
-
-    }
-
-private:
+    private:
 
     /**
      * Modifiable and read across all recursive calls.
@@ -67,7 +67,7 @@ private:
      */
     VecIndicesSetByKey allowedKeys_;
 
-    std::unordered_map<size_t, std::unordered_map<size_t, std::unordered_set<size_t>>> possibleMappings_;
+    std::vector<std::vector<std::vector<size_t>>> possibleMappings_;
     /**
      * Modifiable and read across all recursive calls
      * Stores the keys in Mmap_ that correspond to a vector in Mmap_ that's linearly dependent to
@@ -201,7 +201,7 @@ public:
 
 
         if (possibleMappings_.empty()) {
-            auto mappings = getPossibleMappings(Mmap_, Mprimemap_, omegaSymplecticForm_, d_, sortedKeys_, 2 * n_ );
+            auto mappings = getPossibleMappings(Mmap_, Mprimemap_, omegaSymplecticForm_, d_, n_, sortedKeys_);
             possibleMappings_ = std::move(mappings);
         }
 
@@ -352,6 +352,7 @@ public:
             // Test the validity of a symplectic matrix mapping v to vMap.
             // If this inner loop continues, that means that particular mapping failed, and the
             // next iteration is looking at another mapping possibility.
+
             for (const size_t j : possibleMappings_[sortedMapKeyIndex][i]) {
                 if (mappedVecIndicesStack_.isVecMprimeIndexMapped(j)) {
                     continue;

@@ -387,7 +387,7 @@ bool testMapping(const FMap& MMap, const FMap& MprimeMap, const MatrixCoordinate
     ss_vVec << uMap;
     auto sVvec = ss_vVec.str();
 #endif
-    std::unordered_map<size_t, size_t> innerProductHistogramForU;
+    std::vector<size_t> innerProductHistogramForU(d);
     for (const auto& u_i : U) {
         const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& innerProduct =
             u.transpose() * Omega * u_i;
@@ -398,7 +398,7 @@ bool testMapping(const FMap& MMap, const FMap& MprimeMap, const MatrixCoordinate
         innerProductHistogramForU[innerProdVal] += 1;
     }
 
-    std::unordered_map<size_t, size_t> innerProductHistogramForV;
+    std::vector<size_t> innerProductHistogramForV(d);
     for (const auto& v_i : V) {
         const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& innerProduct =
             uMap.transpose() * Omega * v_i;
@@ -426,35 +426,69 @@ void appendToSystemForMappingsCheck(Eigen::Matrix<long, Eigen::Dynamic, Eigen::D
     existingRREFSystem.row(existingRREFSystem.rows() - 1) = v.transpose();
 }
 
-template <typename MatrixType>
-std::unordered_map<size_t, std::unordered_map<size_t, std::unordered_set<size_t>>>
-getPossibleMappings(const FMap& MMap, const FMap& MprimeMap, const MatrixType& Omega,
-                    const size_t d, const std::vector<FMapKey>& sortedKeys, const size_t maxToGet = 0) {
-    std::unordered_map<size_t, std::unordered_map<size_t, std::unordered_set<size_t>>>
-        possibleMappings;
+constexpr size_t thresholdForParallelInnerProductComputation = 64;
 
+template <typename MatrixType>
+std::vector<std::vector<std::vector<size_t>>>
+getPossibleMappings(const FMap& MMap, const FMap& MprimeMap, const MatrixType& Omega,
+                    const size_t d, const size_t n, const std::vector<FMapKey>& sortedKeys) {
+    std::vector<std::vector<std::vector<size_t>>> possibleMappings(sortedKeys.size());
+    assert(possibleMappings.size() == sortedKeys.size());
     assert(sortedKeys.size() == MMap.size());
     assert(sortedKeys.size() == MprimeMap.size());
-//#pragma omp parallel for shared(possibleMappings) schedule(dynamic)
     size_t vectorsMapped = 0;
     std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> system;
     size_t lastRank = 0;
     for (size_t binIndex = 0; binIndex < sortedKeys.size(); ++binIndex) {
+        assert(possibleMappings[binIndex].empty());
+
         const auto& keyForBin = sortedKeys[binIndex];
         const auto& allV = MMap.get(keyForBin);
+
+        const auto numVecsInThisBin = allV.size();
+        const auto numVecsLeft = vectorsMapped > 2 * n ? 0 : 2 * n - vectorsMapped;
+        const auto numPossibleVecsFromThisV = std::min(numVecsLeft, numVecsInThisBin);
+        if (numPossibleVecsFromThisV > 0) {
+            possibleMappings[binIndex].resize(numPossibleVecsFromThisV);
+            assert(possibleMappings[binIndex].size() == numPossibleVecsFromThisV);
+        }
         const auto& vMapPossibilities = MprimeMap.get(keyForBin);
         for (size_t vIndex = 0; vIndex < allV.size(); ++vIndex) {
             const MatrixCoordinate& vHere = allV[vIndex];
+            assert(vIndex <= possibleMappings[binIndex].size());
 
-            if (vMapPossibilities.size() > 64) {
+            // check if access by vIndex would be invalid
+            if (vIndex == possibleMappings[binIndex].size()) {
+                possibleMappings[binIndex].push_back({});
+                assert(vIndex == possibleMappings[binIndex].size() - 1);
+            }
+
+            size_t thisRank;
+            if (!system) {
+                system = std::make_optional(createSystemForMappingsCheck(vHere));
+                lastRank = 0;
+                thisRank = 1;
+            } else {
+                appendToSystemForMappingsCheck(*system, vHere);
+                thisRank = reduceToREFAndGetRank(*system, d, true);
+                // rows of vHere is the dimension of the vector space. See if we have a basis already
+                assert(2 * n == vHere.rows());
+                assert(thisRank >= lastRank);
+                if (thisRank == lastRank) {
+                    trimZeroRowsFromBottom(*system);
+                    continue;
+                }
+                lastRank = thisRank;
+            }
+
+            if (vMapPossibilities.size() > thresholdForParallelInnerProductComputation) {
 #pragma omp parallel for shared(possibleMappings) schedule(dynamic)
                 for (size_t vMapIndex = 0; vMapIndex < vMapPossibilities.size(); ++vMapIndex) {
                     const auto& vMapPossible = vMapPossibilities[vMapIndex];
                     if (testMapping(MMap, MprimeMap, vHere, vMapPossible, keyForBin, Omega, d)) {
-
 #pragma omp critical(possibleMappings)
                         {
-                            possibleMappings[binIndex][vIndex].insert(vMapIndex);
+                            possibleMappings[binIndex][vIndex].push_back(vMapIndex);
                         }
 
                     }
@@ -463,40 +497,19 @@ getPossibleMappings(const FMap& MMap, const FMap& MprimeMap, const MatrixType& O
                 for (size_t vMapIndex = 0; vMapIndex < vMapPossibilities.size(); ++vMapIndex) {
                     const auto& vMapPossible = vMapPossibilities[vMapIndex];
                     if (testMapping(MMap, MprimeMap, vHere, vMapPossible, keyForBin, Omega, d)) {
-                        possibleMappings[binIndex][vIndex].insert(vMapIndex);
+                        possibleMappings[binIndex][vIndex].push_back(vMapIndex);
                     }
                 }
             }
 
-            if (!system) {
-                system = std::make_optional(createSystemForMappingsCheck(vHere));
-                lastRank = 1;
-            } else {
-                appendToSystemForMappingsCheck(*system, vHere);
-                const size_t rank = reduceToREFAndGetRank(*system, d, true);
-                // rows of vHere is the dimension of the vector space. See if we have a basis already
-                if (rank == vHere.rows()) {
-                    return possibleMappings;
-                }
-                if (rank == lastRank) {
-                    trimZeroRowsFromBottom(*system);
-                }
-                lastRank = rank;
-            }
-
-            assert(possibleMappings.contains(binIndex));
-            assert(possibleMappings[binIndex].contains(vIndex));
             assert(!possibleMappings[binIndex][vIndex].empty());
             vectorsMapped++;
-            if (maxToGet > 0 && vectorsMapped >= maxToGet) {
-                if (allV.size() > 1) { // Ignore trivial mappings
-                    // return possibleMappings;
-                }
+
+            if (thisRank == 2 * n) {
+                return possibleMappings;
             }
         }
-        assert(possibleMappings.contains(binIndex));
     }
-    assert(possibleMappings.size() == sortedKeys.size());
 
     return possibleMappings;
 }

@@ -36,12 +36,14 @@
 #include "internal/complexexactrepr.h"
 #include "internal/util.h"
 
-#define ENABLE_OPENMP_MULTITHREADING 0
+#define ENABLE_OPENMP_MULTITHREADING 1
 #define ENABLE_KEY_SHUFFLE 1
 
 constexpr std::optional<size_t> customStartIndex = std::nullopt;
 
-constexpr size_t counterThresholdForPrintAndHistogramWrite = 50000;
+constexpr size_t counterThresholdForPrintAndHistogramWrite = 20000;
+
+constexpr bool showEveryMatrixWhenMultithreadingDisabled = true;
 
 // From Google Benchmark
 template <typename T>
@@ -159,7 +161,7 @@ int main(int argc, char** argv) {
         if (argc == 3) {
             outliersFilename = std::make_optional(std::string(argv[2]));
 #if ENABLE_OPENMP_MULTITHREADING
-            static_assert(false && "Cannot use outliers and multithreading")
+            assert(false && "Cannot use outliers and multithreading");
 #endif
             std::cout << "Detected outliers file arg " << *outliersFilename << std::endl;
         }
@@ -298,6 +300,8 @@ int main(int argc, char** argv) {
 
     std::atomic<unsigned long long> longestTimeMs = 0;
 
+    std::atomic_bool shouldExitEarly = false;
+
     // constexpr size_t actualStartIndex = customStartIndex.value_or(0);
 
 #if ENABLE_OPENMP_MULTITHREADING
@@ -316,7 +320,7 @@ int main(int argc, char** argv) {
         }
 #endif
 
-        if (foundBad) {
+        if (foundBad || shouldExitEarly) {
             continue;
         }
         // Calculate start of the current block in the flattened data.
@@ -335,12 +339,14 @@ int main(int argc, char** argv) {
 #endif
 
 #if !ENABLE_OPENMP_MULTITHREADING
-        std::stringstream ssgate;
-        ssgate << "====" << std::endl;
-        ssgate << "Processing Gate i=" << i << ", seed = " << seed.value_or(0) << ":"
-        << std::endl << getComplexMatrixExactRepo(C) << std::endl;
-        ssgate << "====" << std::endl;
-        std::cout << ssgate.str() << std::endl;
+        if (showEveryMatrixWhenMultithreadingDisabled) {
+            std::stringstream ssgate;
+            ssgate << "====" << std::endl;
+            ssgate << "Processing Gate i=" << i << ", seed = " << seed.value_or(0) << ":"
+            << std::endl << getComplexMatrixExactRepo(C) << std::endl;
+            ssgate << "====" << std::endl;
+            std::cout << ssgate.str() << std::endl;
+        }
 #endif
 
         Eigen::Matrix<std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> Mprime =
@@ -459,8 +465,13 @@ int main(int argc, char** argv) {
             }
         }
 
-        if (customStartIndex.has_value()) {
+
+        if constexpr (customStartIndex.has_value()) {
+#if ENABLE_OPENMP_MULTITHREADING
+            shouldExitEarly = true;
+#else
             break;
+#endif
         }
     }
 

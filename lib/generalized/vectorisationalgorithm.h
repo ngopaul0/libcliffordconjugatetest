@@ -1,6 +1,8 @@
 #ifndef VECTORISATIONALGORITHM_H
 #define VECTORISATIONALGORITHM_H
 
+#include <unordered_set>
+
 #include "unsupported/Eigen/KroneckerProduct"
 #include <Eigen/Dense>
 #include "internal/FMap.h"
@@ -298,6 +300,167 @@ inline bool isSymplectic(const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynami
     Omega.bottomLeftCorner(n, n) *= static_cast<long>(d - 1);
     // Definition of symplectic S^T * Ω * S = Ω
     return modMatrix(S.transpose() * Omega * S, d) == Omega;
+}
+
+/**
+ * Tests whether u can be mapped to uMap by a symplectic transformation.
+ *
+ * This is based on the property of the symplectic inner product, <u, v> = u^T Omega v, where Omega
+ * (some papers use J) is the standard symplectic matrix. Namely, if S in Sp(2n, Z_d), then
+ * S^T Omega S = Omega by definition of symplectic matrix, and <u, v> = <Su, Sv>, since
+ * (Su)^T Omega (Sv) = u^T S^T Omega Sv = u^T Omega v
+ *
+ * @tparam MatrixType Tests
+ * @param MMap
+ * @param MprimeMap
+ * @param u
+ * @param uMap
+ * @param key
+ * @param Omega
+ * @param d
+ * @return
+ */
+template <typename MatrixType>
+bool testMapping(const FMap& MMap, const FMap& MprimeMap, const MatrixCoordinate& u,
+                 const MatrixCoordinate& uMap, const FMapKey& key, const MatrixType& Omega,
+                 const size_t d) {
+    const auto& U = MMap.get(key);
+    const auto& V = MprimeMap.get(key);
+#ifndef NDEBUG
+    std::stringstream ssU;
+    ssU << "U = \n";
+    for (const auto& z : U) {
+        ssU << z << ";\n";
+    }
+    auto sU = ssU.str();
+
+    std::stringstream ssV;
+    ssV << "V = \n";
+    for (const auto& z : V) {
+        ssV << z << ";\n";
+    }
+    auto sV = ssV.str();
+
+    std::stringstream ss_uVec;
+    ss_uVec << u;
+    auto sUvec = ss_uVec.str();
+
+    std::stringstream ss_vVec;
+    ss_vVec << uMap;
+    auto sVvec = ss_vVec.str();
+#endif
+    std::unordered_map<size_t, size_t> innerProductHistogramForU;
+    for (const auto& u_i : U) {
+        const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& innerProduct =
+            u.transpose() * Omega * u_i;
+        if (innerProduct.rows() != 1 && innerProduct.cols() != 1) {
+            throw std::runtime_error("bad symplectic inner product shape");
+        }
+        const long innerProdVal = safeMod(innerProduct(0, 0), d);
+        innerProductHistogramForU[innerProdVal] += 1;
+    }
+
+    std::unordered_map<size_t, size_t> innerProductHistogramForV;
+    for (const auto& v_i : V) {
+        const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& innerProduct =
+            uMap.transpose() * Omega * v_i;
+        if (innerProduct.rows() != 1 && innerProduct.cols() != 1) {
+            throw std::runtime_error("bad symplectic inner product shape");
+        }
+        const long innerProdVal = safeMod(innerProduct(0, 0), d);
+        innerProductHistogramForV[innerProdVal] += 1;
+        if (innerProductHistogramForV[innerProdVal] > innerProductHistogramForU[innerProdVal]) {
+            return false;
+        }
+    }
+
+    return innerProductHistogramForU == innerProductHistogramForV;
+}
+
+template <typename VectorType>
+Eigen::Matrix<typename VectorType::Scalar, Eigen::Dynamic, Eigen::Dynamic> createSystemForMappingsCheck(const VectorType& v) {
+    return v.transpose();
+}
+
+template <typename VectorType>
+void appendToSystemForMappingsCheck(Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& existingRREFSystem, const VectorType& v) {
+    existingRREFSystem.conservativeResize(existingRREFSystem.rows() + 1, Eigen::NoChange);
+    existingRREFSystem.row(existingRREFSystem.rows() - 1) = v.transpose();
+}
+
+template <typename MatrixType>
+std::unordered_map<size_t, std::unordered_map<size_t, std::unordered_set<size_t>>>
+getPossibleMappings(const FMap& MMap, const FMap& MprimeMap, const MatrixType& Omega,
+                    const size_t d, const std::vector<FMapKey>& sortedKeys, const size_t maxToGet = 0) {
+    std::unordered_map<size_t, std::unordered_map<size_t, std::unordered_set<size_t>>>
+        possibleMappings;
+
+    assert(sortedKeys.size() == MMap.size());
+    assert(sortedKeys.size() == MprimeMap.size());
+//#pragma omp parallel for shared(possibleMappings) schedule(dynamic)
+    size_t vectorsMapped = 0;
+    std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> system;
+    size_t lastRank = 0;
+    for (size_t binIndex = 0; binIndex < sortedKeys.size(); ++binIndex) {
+        const auto& keyForBin = sortedKeys[binIndex];
+        const auto& allV = MMap.get(keyForBin);
+        const auto& vMapPossibilities = MprimeMap.get(keyForBin);
+        for (size_t vIndex = 0; vIndex < allV.size(); ++vIndex) {
+            const MatrixCoordinate& vHere = allV[vIndex];
+
+            if (vMapPossibilities.size() > 64) {
+#pragma omp parallel for shared(possibleMappings) schedule(dynamic)
+                for (size_t vMapIndex = 0; vMapIndex < vMapPossibilities.size(); ++vMapIndex) {
+                    const auto& vMapPossible = vMapPossibilities[vMapIndex];
+                    if (testMapping(MMap, MprimeMap, vHere, vMapPossible, keyForBin, Omega, d)) {
+
+#pragma omp critical(possibleMappings)
+                        {
+                            possibleMappings[binIndex][vIndex].insert(vMapIndex);
+                        }
+
+                    }
+                }
+            } else {
+                for (size_t vMapIndex = 0; vMapIndex < vMapPossibilities.size(); ++vMapIndex) {
+                    const auto& vMapPossible = vMapPossibilities[vMapIndex];
+                    if (testMapping(MMap, MprimeMap, vHere, vMapPossible, keyForBin, Omega, d)) {
+                        possibleMappings[binIndex][vIndex].insert(vMapIndex);
+                    }
+                }
+            }
+
+            if (!system) {
+                system = std::make_optional(createSystemForMappingsCheck(vHere));
+                lastRank = 1;
+            } else {
+                appendToSystemForMappingsCheck(*system, vHere);
+                const size_t rank = reduceToREFAndGetRank(*system, d, true);
+                // rows of vHere is the dimension of the vector space. See if we have a basis already
+                if (rank == vHere.rows()) {
+                    return possibleMappings;
+                }
+                if (rank == lastRank) {
+                    trimZeroRowsFromBottom(*system);
+                }
+                lastRank = rank;
+            }
+
+            assert(possibleMappings.contains(binIndex));
+            assert(possibleMappings[binIndex].contains(vIndex));
+            assert(!possibleMappings[binIndex][vIndex].empty());
+            vectorsMapped++;
+            if (maxToGet > 0 && vectorsMapped >= maxToGet) {
+                if (allV.size() > 1) { // Ignore trivial mappings
+                    // return possibleMappings;
+                }
+            }
+        }
+        assert(possibleMappings.contains(binIndex));
+    }
+    assert(possibleMappings.size() == sortedKeys.size());
+
+    return possibleMappings;
 }
 
 size_t returnLastNumRecursiveCalls();

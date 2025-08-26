@@ -6,7 +6,7 @@ import csv
 import os
 
 use_log_scale = True
-max_val_filter = 40
+max_val_filter = 20
 num_bins = 100
 
 sortCsv = False

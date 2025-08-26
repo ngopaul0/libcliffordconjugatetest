@@ -416,12 +416,14 @@ bool testMapping(const FMap& MMap, const FMap& MprimeMap, const MatrixCoordinate
 }
 
 template <typename VectorType>
-Eigen::Matrix<typename VectorType::Scalar, Eigen::Dynamic, Eigen::Dynamic> createSystemForMappingsCheck(const VectorType& v) {
+Eigen::Matrix<typename VectorType::Scalar, Eigen::Dynamic, Eigen::Dynamic>
+createSystemForMappingsCheck(const VectorType& v) {
     return v.transpose();
 }
 
 template <typename VectorType>
-void appendToSystemForMappingsCheck(Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& existingRREFSystem, const VectorType& v) {
+void appendToSystemForMappingsCheck(
+    Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& existingRREFSystem, const VectorType& v) {
     existingRREFSystem.conservativeResize(existingRREFSystem.rows() + 1, Eigen::NoChange);
     existingRREFSystem.row(existingRREFSystem.rows() - 1) = v.transpose();
 }
@@ -471,7 +473,8 @@ getPossibleMappings(const FMap& MMap, const FMap& MprimeMap, const MatrixType& O
             } else {
                 appendToSystemForMappingsCheck(*system, vHere);
                 thisRank = reduceToREFAndGetRank(*system, d, true);
-                // rows of vHere is the dimension of the vector space. See if we have a basis already
+                // rows of vHere is the dimension of the vector space. See if we have a basis
+                // already
                 assert(2 * n == vHere.rows());
                 assert(thisRank >= lastRank);
                 if (thisRank == lastRank) {
@@ -490,7 +493,6 @@ getPossibleMappings(const FMap& MMap, const FMap& MprimeMap, const MatrixType& O
                         {
                             possibleMappings[binIndex][vIndex].push_back(vMapIndex);
                         }
-
                     }
                 }
             } else {

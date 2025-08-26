@@ -36,24 +36,22 @@ class RecursionContext {
     const std::vector<FMapKey>& sortedKeys_;
     Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> omegaSymplecticForm_;
 
-    public:
-
+  public:
     RecursionContext(const size_t d, const size_t n, const std::complex<double>& omega,
-                       const Eigen::Ref<const Eigen::MatrixXcd>& M, const MpMatrixType& M_p,
-                       const MpMatrixType& Mprime_p, const FMap& Mmap, const FMap& Mprimemap,
-                       const std::vector<FMapKey>& sortedKeys)
-          : d_(d), n_(n), omega_(omega), M_(M), M_p_(M_p), Mprime_p_(Mprime_p), Mmap_(Mmap),
-            Mprimemap_(Mprimemap), sortedKeys_(sortedKeys) {
+                     const Eigen::Ref<const Eigen::MatrixXcd>& M, const MpMatrixType& M_p,
+                     const MpMatrixType& Mprime_p, const FMap& Mmap, const FMap& Mprimemap,
+                     const std::vector<FMapKey>& sortedKeys)
+        : d_(d), n_(n), omega_(omega), M_(M), M_p_(M_p), Mprime_p_(Mprime_p), Mmap_(Mmap),
+          Mprimemap_(Mprimemap), sortedKeys_(sortedKeys) {
 
-          omegaSymplecticForm_ =
-              Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>::Zero(2 * n, 2 * n);
-          omegaSymplecticForm_.topRightCorner(n, n).setIdentity();
-          omegaSymplecticForm_.bottomLeftCorner(n, n).setIdentity();
-          omegaSymplecticForm_.bottomLeftCorner(n, n) *= static_cast<long>(d - 1);
-      }
+        omegaSymplecticForm_ =
+            Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>::Zero(2 * n, 2 * n);
+        omegaSymplecticForm_.topRightCorner(n, n).setIdentity();
+        omegaSymplecticForm_.bottomLeftCorner(n, n).setIdentity();
+        omegaSymplecticForm_.bottomLeftCorner(n, n) *= static_cast<long>(d - 1);
+    }
 
-    private:
-
+  private:
     /**
      * Modifiable and read across all recursive calls.
      * Stores the maximum (bin) index for sortedKeys_ that we're allowed to look at.
@@ -181,7 +179,7 @@ class RecursionContext {
      */
     MappedVecIndicesStack mappedVecIndicesStack_;
 
-public:
+  public:
     [[nodiscard]] std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>>
     findSymplecticMatrix() {
         if (sortedKeys_.empty()) {
@@ -196,12 +194,12 @@ public:
         // - Every unique 1-dim subspace spans all of Z_d^(2n) when they're all unioned. Thus
         //   (# of unique 1-dim subspace)*(# of vectors in each 1-dim subspace) = # non-zero vectors
         // - Every unique 1-dim subspace has d-1 elements, therefore
-        //      (# of unique 1-dim subspace) = (# non-zero vectors) / (# of vectors in each 1-dim subspace)
-
-
+        //      (# of unique 1-dim subspace) = (# non-zero vectors) / (# of vectors in each 1-dim
+        //      subspace)
 
         if (possibleMappings_.empty()) {
-            auto mappings = getPossibleMappings(Mmap_, Mprimemap_, omegaSymplecticForm_, d_, n_, sortedKeys_);
+            auto mappings =
+                getPossibleMappings(Mmap_, Mprimemap_, omegaSymplecticForm_, d_, n_, sortedKeys_);
             possibleMappings_ = std::move(mappings);
         }
 
@@ -445,32 +443,10 @@ public:
                                 return std::make_optional(S);
                             }
                         }
-
-/*                        if (!explicitMappingsForAllowedKeys_.empty() && !allowedKeys_.empty()) {
-
-
-                            for (const auto& [binIndex, allowedVKeyMap] : allowedKeys_) {
-                                const auto& keyForBin = sortedKeys_[binIndex];
-                                for (const auto& vIndex : allowedVKeyMap) {
-                                    const MatrixCoordinate& vHere = Mmap_.get(keyForBin)[vIndex];
-                                    const auto& vMapPossibilities = Mprimemap_.get(keyForBin);
-                                    for (size_t vMapIndex = 0; vMapIndex < vMapPossibilities.size(); ++vMapIndex) {
-                                        const auto& vMapPossible = vMapPossibilities[vMapIndex];
-                                        if (testMapping(Mmap_, Mprimemap_, vHere, vMapPossible, keyForBin, omegaSymplecticForm_, d_)) {
-                                            explicitMappingsForAllowedKeys_[binIndex][vIndex] = vMapIndex;
-                                        }
-                                    }
-                                    if (!explicitMappingsForAllowedKeys_[binIndex].contains(vIndex)) {
-                                        // return std::make_optional(S);
-                                    }
-                                }
-                            }
-
-                        }*/
-
                         continue;
                     }
-                    // TODO: Update this with the better method for handling linear dependent vectors
+                    // TODO: Update this with the better method for handling linear dependent
+                    // vectors
                     if (systemSRank == lastSystemSRank) {
                         // System rank not changing means what we just added was just a multiple
                         // of some other row
@@ -516,7 +492,7 @@ public:
                 unmarkMappingAndPopFromHistory(sortedMapKeyIndex, i, j);
             }
         }
-        next_bin_key:
+    next_bin_key:
         // If we are here, then either all the vectors in this bin are already mapped to something,
         // (resulting in a loop exit)
         // or we tried all the mappings for vectors in vecM and failed and exited the loop.
@@ -529,8 +505,8 @@ public:
             // If the allowed keys are set, we should only be proceeding if at least one of those
             // keys are mapped to something.
             const auto& allowedVecMIndices = allowedKeys_[sortedMapKeyIndex];
-            const bool isAtLeastOneAllowedVecBeingMapped = std::ranges::any_of(allowedVecMIndices,
-                [&](const size_t vecMIndex) {
+            const bool isAtLeastOneAllowedVecBeingMapped =
+                std::ranges::any_of(allowedVecMIndices, [&](const size_t vecMIndex) {
                     return mappedVecIndicesStack_.isVecMIndexMapped(vecMIndex);
                 });
             if (!isAtLeastOneAllowedVecBeingMapped) {

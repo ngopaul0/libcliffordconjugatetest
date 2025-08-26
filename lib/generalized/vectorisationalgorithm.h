@@ -461,7 +461,7 @@ getPossibleMappings(const FMap& MMap, const FMap& MprimeMap, const MatrixType& O
 
             // check if access by vIndex would be invalid
             if (vIndex == possibleMappings[binIndex].size()) {
-                possibleMappings[binIndex].push_back({});
+                possibleMappings[binIndex].emplace_back();
                 assert(vIndex == possibleMappings[binIndex].size() - 1);
             }
 

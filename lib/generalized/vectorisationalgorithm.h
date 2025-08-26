@@ -303,12 +303,50 @@ inline bool isSymplectic(const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynami
 }
 
 /**
- * Tests whether u can be mapped to uMap by a symplectic transformation.
+ * Given two sets U = MMap(key) and V = MprimeMap(key) = S(U), tests whether u in U can be mapped to
+ * uMap in V by S, where U, V are subsets of Z_d^(2n).
  *
  * This is based on the property of the symplectic inner product, <u, v> = u^T Omega v, where Omega
  * (some papers use J) is the standard symplectic matrix. Namely, if S in Sp(2n, Z_d), then
  * S^T Omega S = Omega by definition of symplectic matrix, and <u, v> = <Su, Sv>, since
- * (Su)^T Omega (Sv) = u^T S^T Omega Sv = u^T Omega v
+ * (Su)^T Omega (Sv) = u^T S^T Omega Sv = u^T Omega v.
+ *
+ * To build intuition, note that given U ⊆ Z_d^(2n) and its image under some S in Sp(2n, Z_d),
+ * V = S(U), S being invertible means |V| = |U|. We also have the following proposition:
+ *
+ * Proposition. Suppose u in U and v in V. If v = S*u, then for every x in U, <u, x> = <v, Sx>
+ * Proof: <v, Sx> = <Su, Sx> = <u, x>
+ *
+ * The intuition is that S being symplectic implies it's invertible, i.e. bijection, so given
+ * x in U, Sx would be the unique value in V = S(U). So using the above proposition that goes over
+ * all x in U, the occurrences of the values of the inner product must line up. We formalize this
+ * below:
+ *
+ * Proposition. Fix u in U, v in V. Let k_U(n) = {x in U : <u, x> = n} and
+ * k_V(n) = {y in V : <v, y> = n}. If v = S*u, then |k_U(n)| = |k_V(n)| for all n in Z_d. (i.e. the
+ * frequencies of the symplectic inner products must line up).
+ * Proof: Fix n in Z_d. We claim there is a bijection k_U(n) to k_V(n) defined by S restricted
+ * to U.
+ * - This map is well-defined, since if x in U, then Sx in V, and <v, Sx> = <Su, Sx> = <u,x> = n, so
+ *   Sx in k_V(n).
+ * - Clearly Sx = Sy implies x = y since S is invertible / a bijection.
+ * - Let y in k_V(n). Then n = <v,y>, and k_V(n) ⊆ V = S(U) implies y = Sx for some x in U. Now
+ *   n = <v, y> = <Su, Sx> = <u, x>, so we conclude x in k_U(n). So restricted S is surjective.
+ *
+ * Note that false positives exists. This is only a necessary condition on v = S*u.
+ *
+ * Example (False positive). Consider d = 3, n = 1. Then let
+ * \code
+ *  S = [2 0], U = {<0, 0>, <0, 1>, <0, 2>, <1, 0>, <2, 0>, <2, 1>, <2, 2>} (column vectors)
+ *      [0 2]
+ * \endcode
+ * Then consider u = <1, 0>. We have Su = <2,0>. But now let v = <1,0>, which happens to be S*<2,0>
+ * where <2,0> in U. It can be computed that k_U(n) == k_V(n) for all n in Z_3 (the exact histogram
+ * is {0: 3, 1: 2, 2: 2}
+ *
+ * Also, the problem comes when sets consisting of 1-dimension subspaces (i.e. sets where there
+ * are no linearly independent subsets of size > 1; hyperplanes). So we stop once a basis is
+ * established.
  *
  * @tparam MatrixType Tests
  * @param MMap

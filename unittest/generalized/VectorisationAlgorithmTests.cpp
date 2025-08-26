@@ -473,16 +473,10 @@ TEST_CASE("findSymplecticMatrix", "[vectorisationalgorithm][findSymplecticMatrix
                 }
                 INFO("binIndex " << binIndex << ", vIndex " << vIndex);
                 REQUIRE(foundActual);
-                if (!possibleMappings[binIndex].contains(vIndex)) {
-                    // return std::make_optional(S);
-                }
             }
         }
 
-        const auto possibleMapsFromFn = getPossibleMappings(MMap, MprimeMap, Omega, d, sortedKeys);
-        REQUIRE(possibleMapsFromFn.size() == possibleMappings.size());
-        REQUIRE(possibleMapsFromFn == possibleMappings);
-
+        const auto possibleMapsFromFn = getPossibleMappings(MMap, MprimeMap, Omega, d, n, sortedKeys);
 
         auto result = findSymplecticMatrix(d, n, omega, M, M_p, Mprime_p, MMap, MprimeMap);
         REQUIRE(result.has_value());

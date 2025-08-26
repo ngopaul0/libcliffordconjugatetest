@@ -166,6 +166,21 @@ TEST_CASE("multiple Pauli basis elements", "[multiple]") {
         REQUIRE(isCliffordConjugate(M, Mprime));
     }
 
+    SECTION("d=11: Linearly dependent M_p", "[generalized][single-qubit][d=11]") {
+        const int d = 11; // Example dimension
+        const int inv_2 = fastPowerMod(2, d - 2, d);
+        const std::complex<double> omega =
+            std::exp(std::complex<double>(0, 2.0 * pi / d));
+        const Eigen::MatrixXcd Mprime = W(d, 1, 2, inv_2, omega) + W(d, 2, 4, inv_2, omega)
+            + W(d, 3, 6, inv_2, omega) +  W(d, 4, 8, inv_2, omega) +  W(d, 7, 14, inv_2, omega);
+
+        const Eigen::MatrixXcd C = W(d, 3, 4, inv_2, omega) * cliffordPermutationGate(d, 7);
+        const Eigen::MatrixXcd Cstar = C.adjoint();
+        const Eigen::MatrixXcd M = C * Mprime * Cstar;
+
+        REQUIRE(isCliffordConjugateGeneralized(d, 1, M, Mprime, std::make_optional(123123)));
+    }
+
     SECTION("Generalized algorithm: d=11: Linearly dependent M_p", "[generalized][d=11]") {
         // SKIP("Takes too long (48-50s)");
         const int d = 11; // Example dimension
@@ -458,7 +473,7 @@ TEST_CASE("generalized algorithm slow cases", "[generalized][slow]") {
         const Eigen::MatrixXcd C = W(d, 3, 4, inv_2, omega) * cliffordPermutationGate(d, 7);
         const Eigen::MatrixXcd Cstar = C.adjoint();
         const Eigen::MatrixXcd M = C * Mprime * Cstar;
-        bool isCliffordConjugate = isCliffordConjugateGeneralized(d, 1, M, Mprime);
+        bool isCliffordConjugate = isCliffordConjugateGeneralized(d, 1, M, Mprime, std::make_optional(52534));
         REQUIRE(isCliffordConjugate);
     }
 

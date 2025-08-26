@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <random>
+#include <unordered_set>
 #include <vector>
 
 #include "catch2/matchers/catch_matchers.hpp"
@@ -429,6 +430,59 @@ TEST_CASE("findSymplecticMatrix", "[vectorisationalgorithm][findSymplecticMatrix
         std::stringstream ssv2;
         ssv2 << Sv2;
         auto strv2 = ssv2.str();
+
+        std::stringstream ssS;
+        ssS << S;
+        auto strS = ssS.str();
+
+        Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> Omega =
+                                Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>::Zero(2 * n, 2 * n);
+        Omega.topRightCorner(n, n).setIdentity();
+        Omega.bottomLeftCorner(n, n).setIdentity();
+        Omega.bottomLeftCorner(n, n) *= static_cast<long>(d - 1);
+
+        std::unordered_map<size_t, std::unordered_map<size_t, std::unordered_set<size_t>>> possibleMappings;
+        const auto sortedKeys = MMap.sortedKeys();
+        for (size_t binIndex = 0; binIndex < sortedKeys.size(); ++binIndex) {
+            const auto& keyForBin = sortedKeys[binIndex];
+            const auto& allV = MMap.get(keyForBin);
+            const auto& vMapPossibilities = MprimeMap.get(keyForBin);
+            for (size_t vIndex = 0; vIndex < allV.size(); ++vIndex) {
+
+                const MatrixCoordinate& vHere = allV[vIndex];
+
+                bool foundActual = false;
+                for (size_t vMapIndex = 0; vMapIndex < vMapPossibilities.size(); ++vMapIndex) {
+                    INFO("binIndex " << binIndex << ", vIndex " << vIndex << ", vMapIndex " << vMapIndex);
+                    const auto& vMapPossible = vMapPossibilities[vMapIndex];
+                    const MatrixCoordinate& lhs = modMatrix(S * vHere, d);
+                    if (lhs != vMapPossible) {
+                        std::stringstream ssLhs;
+                        ssLhs << lhs;
+                        auto s = ssLhs.str();
+                        std::stringstream ssVMapPossible;
+                        ssVMapPossible << vMapPossible;
+                        auto s2 = ssVMapPossible.str();
+                    } else {
+                        foundActual = true;
+                    }
+
+                    if (testMapping(MMap, MprimeMap, vHere, vMapPossible, keyForBin, Omega, d)) {
+                        possibleMappings[binIndex][vIndex].insert(vMapIndex);
+                    }
+                }
+                INFO("binIndex " << binIndex << ", vIndex " << vIndex);
+                REQUIRE(foundActual);
+                if (!possibleMappings[binIndex].contains(vIndex)) {
+                    // return std::make_optional(S);
+                }
+            }
+        }
+
+        const auto possibleMapsFromFn = getPossibleMappings(MMap, MprimeMap, Omega, d, sortedKeys);
+        REQUIRE(possibleMapsFromFn.size() == possibleMappings.size());
+        REQUIRE(possibleMapsFromFn == possibleMappings);
+
 
         auto result = findSymplecticMatrix(d, n, omega, M, M_p, Mprime_p, MMap, MprimeMap);
         REQUIRE(result.has_value());

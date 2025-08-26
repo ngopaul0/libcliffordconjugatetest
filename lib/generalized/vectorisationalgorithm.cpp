@@ -24,7 +24,7 @@ static size_t s_numRecursiveCalls = 0;
 
 size_t returnLastNumRecursiveCalls() { return s_numRecursiveCalls; }
 
-struct RecursionContext {
+class RecursionContext {
     const size_t d_;
     const size_t n_;
     const std::complex<double>& omega_;
@@ -34,6 +34,25 @@ struct RecursionContext {
     const FMap& Mmap_;
     const FMap& Mprimemap_;
     const std::vector<FMapKey>& sortedKeys_;
+    Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> omegaSymplecticForm_;
+
+    public:
+
+    RecursionContext(const size_t d, const size_t n, const std::complex<double>& omega,
+                     const Eigen::Ref<const Eigen::MatrixXcd>& M, const MpMatrixType& M_p,
+                     const MpMatrixType& Mprime_p, const FMap& Mmap, const FMap& Mprimemap,
+                     const std::vector<FMapKey>& sortedKeys)
+        : d_(d), n_(n), omega_(omega), M_(M), M_p_(M_p), Mprime_p_(Mprime_p), Mmap_(Mmap), Mprimemap_(Mprimemap), sortedKeys_(sortedKeys) {
+
+        omegaSymplecticForm_ = Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>::Zero(2 * n, 2 * n);
+        omegaSymplecticForm_.topRightCorner(n, n).setIdentity();
+        omegaSymplecticForm_.bottomLeftCorner(n, n).setIdentity();
+        omegaSymplecticForm_.bottomLeftCorner(n, n) *= static_cast<long>(d - 1);
+
+
+    }
+
+private:
 
     /**
      * Modifiable and read across all recursive calls.
@@ -47,6 +66,8 @@ struct RecursionContext {
      * other vectors in MNap.
      */
     VecIndicesSetByKey allowedKeys_;
+
+    std::unordered_map<size_t, std::unordered_map<size_t, std::unordered_set<size_t>>> possibleMappings_;
     /**
      * Modifiable and read across all recursive calls
      * Stores the keys in Mmap_ that correspond to a vector in Mmap_ that's linearly dependent to
@@ -160,10 +181,28 @@ struct RecursionContext {
      */
     MappedVecIndicesStack mappedVecIndicesStack_;
 
+public:
     [[nodiscard]] std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>>
     findSymplecticMatrix() {
         if (sortedKeys_.empty()) {
             return std::nullopt;
+        }
+
+        // number of unique 1-dimension subspaces in Z_d^(2n), i.e. the number of maximal sets that
+        // do not contain a linearly independent subset of size > 1, is d^(2n) - 1 / (d-1)
+        // - There are d^(2n) - 1 unique non-zero vectors (just exclude zero element)
+        // - For each unique nonzero vector, you can create hyperplanes by multiplying by nonzero
+        //   scalar. d - 1 such scalars (exclude 0)
+        // - Every unique 1-dim subspace spans all of Z_d^(2n) when they're all unioned. Thus
+        //   (# of unique 1-dim subspace)*(# of vectors in each 1-dim subspace) = # non-zero vectors
+        // - Every unique 1-dim subspace has d-1 elements, therefore
+        //      (# of unique 1-dim subspace) = (# non-zero vectors) / (# of vectors in each 1-dim subspace)
+
+
+
+        if (possibleMappings_.empty()) {
+            auto mappings = getPossibleMappings(Mmap_, Mprimemap_, omegaSymplecticForm_, d_, sortedKeys_, 2 * n_ );
+            possibleMappings_ = std::move(mappings);
         }
 
         constexpr size_t sortedKeysStartIndex = 0;
@@ -313,13 +352,20 @@ struct RecursionContext {
             // Test the validity of a symplectic matrix mapping v to vMap.
             // If this inner loop continues, that means that particular mapping failed, and the
             // next iteration is looking at another mapping possibility.
-            for (size_t j = 0; j < vecsMprime.size(); ++j) {
+            for (const size_t j : possibleMappings_[sortedMapKeyIndex][i]) {
                 if (mappedVecIndicesStack_.isVecMprimeIndexMapped(j)) {
                     continue;
                 }
                 if (shouldSkipThisVecMKey(sortedMapKeyIndex, i)) {
                     break;
                 }
+                /*
+                if (!possibleMappings_.empty()) {
+                    if (!possibleMappings_[sortedMapKeyIndex][i].contains(j)) {
+                        continue;
+                    }
+                }
+                */
 
                 const auto& vMap = vecsMprime[j];
                 const size_t n_vMap = vecsMprimeEntry.n[j];
@@ -389,10 +435,38 @@ struct RecursionContext {
                                 recoverPPrimeQPrimeVecFromSystem(systemPPrimeQPrimeForPair, n_);
                             if (test_clifford_conjugate_lemma_10(d_, pPrime_qPrime_Vec, omega_, M_,
                                                                  M_p_, Mprime_p_, S)) {
+#ifndef NDEBUG
+                                std::stringstream ss;
+                                ss << S;
+                                auto Ss = ss.str();
+#endif
                                 // RECURSION END: We have found a valid S that satisfies Lemma 10.
                                 return std::make_optional(S);
                             }
                         }
+
+/*                        if (!explicitMappingsForAllowedKeys_.empty() && !allowedKeys_.empty()) {
+
+
+                            for (const auto& [binIndex, allowedVKeyMap] : allowedKeys_) {
+                                const auto& keyForBin = sortedKeys_[binIndex];
+                                for (const auto& vIndex : allowedVKeyMap) {
+                                    const MatrixCoordinate& vHere = Mmap_.get(keyForBin)[vIndex];
+                                    const auto& vMapPossibilities = Mprimemap_.get(keyForBin);
+                                    for (size_t vMapIndex = 0; vMapIndex < vMapPossibilities.size(); ++vMapIndex) {
+                                        const auto& vMapPossible = vMapPossibilities[vMapIndex];
+                                        if (testMapping(Mmap_, Mprimemap_, vHere, vMapPossible, keyForBin, omegaSymplecticForm_, d_)) {
+                                            explicitMappingsForAllowedKeys_[binIndex][vIndex] = vMapIndex;
+                                        }
+                                    }
+                                    if (!explicitMappingsForAllowedKeys_[binIndex].contains(vIndex)) {
+                                        // return std::make_optional(S);
+                                    }
+                                }
+                            }
+
+                        }*/
+
                         continue;
                     }
                     // TODO: Update this with the better method for handling linear dependent vectors
@@ -512,7 +586,7 @@ findSymplecticMatrix(const size_t d, const size_t n, const std::complex<double>&
         }
     }
 
-    RecursionContext context{d, n, omega, M, M_p, Mprime_p, Mmap, Mprimemap, sortedKeys};
+    RecursionContext context(d, n, omega, M, M_p, Mprime_p, Mmap, Mprimemap, sortedKeys);
     return context.findSymplecticMatrix();
 }
 

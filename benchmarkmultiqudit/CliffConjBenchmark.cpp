@@ -156,6 +156,47 @@ ComplexExactRepr(-4628199217061079727,4598871928832275230).cmplx(), ComplexExact
 
  */
 
+void BM_CliffordConjugateTest2Qudits_ExtremelySlow3(benchmark::State& state) {
+    const int d = 3;
+    const size_t n = 2;
+    const long inv_2 = modInverse(2, d);
+    const std::complex<double> omega =
+        std::exp(std::complex<double>(0, 2.0 * cliffconjtest::pi / d));
+
+    // This example will currently fail at i = 7 without the early checks against error propagation
+    // in checkPhase
+    const Eigen::MatrixXcd M = // Eigen::kroneckerProduct(M1, M2) + H
+        - std::sqrt(2) * Eigen::kroneckerProduct(cliffconjtest::W(d, 1, 3, inv_2, omega), cliffconjtest::W(d, 1, 3, inv_2, omega));
+
+    const std::mt19937::result_type seedValue = 6737412183917269720;
+
+    Eigen::Matrix<std::complex<double>, 9, 9> C;
+    C << ComplexExactRepr(4599676419421066582,0).cmplx(), ComplexExactRepr(4599676419421066574,-4867189941065848227).cmplx(), ComplexExactRepr(4599676419421066581,-4875147231828712554).cmplx(), ComplexExactRepr(4599676419421066581,-4868712924105632778).cmplx(), ComplexExactRepr(4599676419421066581,-4868712924105632778).cmplx(), ComplexExactRepr(4599676419421066581,-4868712924105632778).cmplx(), ComplexExactRepr(-4628199217061079721,-4624500108022500583).cmplx(), ComplexExactRepr(-4628199217061079721,-4624500108022500583).cmplx(), ComplexExactRepr(-4628199217061079721,-4624500108022500583).cmplx(),
+ComplexExactRepr(-4628199217061079724,4598871928832275228).cmplx(), ComplexExactRepr(-4628199217061079724,4598871928832275228).cmplx(), ComplexExactRepr(-4628199217061079724,4598871928832275228).cmplx(), ComplexExactRepr(4599676419421066578,-4853754498398552064).cmplx(), ComplexExactRepr(4599676419421066578,-4853754498398552064).cmplx(), ComplexExactRepr(4599676419421066578,-4853754498398552064).cmplx(), ComplexExactRepr(-4628199217061079724,4598871928832275228).cmplx(), ComplexExactRepr(-4628199217061079723,4598871928832275229).cmplx(), ComplexExactRepr(-4628199217061079732,4598871928832275222).cmplx(),
+ComplexExactRepr(-4628199217061079730,4598871928832275226).cmplx(), ComplexExactRepr(-4628199217061079730,4598871928832275226).cmplx(), ComplexExactRepr(-4628199217061079730,4598871928832275226).cmplx(), ComplexExactRepr(-4628199217061079730,-4624500108022500587).cmplx(), ComplexExactRepr(-4628199217061079724,-4624500108022500581).cmplx(), ComplexExactRepr(-4628199217061079723,-4624500108022500580).cmplx(), ComplexExactRepr(-4628199217061079724,-4624500108022500581).cmplx(), ComplexExactRepr(-4628199217061079724,-4624500108022500581).cmplx(), ComplexExactRepr(-4628199217061079724,-4624500108022500581).cmplx(),
+ComplexExactRepr(-4628199217061079724,-4624500108022500581).cmplx(), ComplexExactRepr(-4628199217061079728,4598871928832275228).cmplx(), ComplexExactRepr(4599676419421066579,-4849813848724602880).cmplx(), ComplexExactRepr(-4628199217061079721,-4624500108022500578).cmplx(), ComplexExactRepr(-4628199217061079735,4598871928832275224).cmplx(), ComplexExactRepr(4599676419421066581,-4849221378237466083).cmplx(), ComplexExactRepr(-4628199217061079727,4598871928832275230).cmplx(), ComplexExactRepr(4599676419421066581,-4849082445743659161).cmplx(), ComplexExactRepr(-4628199217061079711,-4624500108022500584).cmplx(),
+ComplexExactRepr(-4628199217061079719,4598871928832275228).cmplx(), ComplexExactRepr(4599676419421066582,-4866889997311716010).cmplx(), ComplexExactRepr(-4628199217061079724,-4624500108022500588).cmplx(), ComplexExactRepr(4599676419421066581,-4863217429351772248).cmplx(), ComplexExactRepr(-4628199217061079718,-4624500108022500582).cmplx(), ComplexExactRepr(-4628199217061079732,4598871928832275230).cmplx(), ComplexExactRepr(-4628199217061079735,4598871928832275229).cmplx(), ComplexExactRepr(4599676419421066578,-4846436149004075008).cmplx(), ComplexExactRepr(-4628199217061079709,-4624500108022500588).cmplx(),
+ComplexExactRepr(-4628199217061079727,-4624500108022500578).cmplx(), ComplexExactRepr(-4628199217061079723,4598871928832275228).cmplx(), ComplexExactRepr(4599676419421066580,-4852836356408566124).cmplx(), ComplexExactRepr(4599676419421066579,-4853754498398552064).cmplx(), ComplexExactRepr(-4628199217061079717,-4624500108022500585).cmplx(), ComplexExactRepr(-4628199217061079740,4598871928832275229).cmplx(), ComplexExactRepr(4599676419421066573,-4852666091460975974).cmplx(), ComplexExactRepr(-4628199217061079715,-4624500108022500584).cmplx(), ComplexExactRepr(-4628199217061079735,4598871928832275231).cmplx(),
+ComplexExactRepr(-4628199217061079722,4598871928832275230).cmplx(), ComplexExactRepr(-4628199217061079714,-4624500108022500582).cmplx(), ComplexExactRepr(4599676419421066581,-4844799238623025243).cmplx(), ComplexExactRepr(-4628199217061079723,4598871928832275228).cmplx(), ComplexExactRepr(-4628199217061079713,-4624500108022500582).cmplx(), ComplexExactRepr(4599676419421066580,-4844747299143811072).cmplx(), ComplexExactRepr(4599676419421066585,-4853379198429604522).cmplx(), ComplexExactRepr(-4628199217061079744,4598871928832275226).cmplx(), ComplexExactRepr(-4628199217061079703,-4624500108022500586).cmplx(),
+ComplexExactRepr(-4628199217061079729,4598871928832275229).cmplx(), ComplexExactRepr(-4628199217061079712,-4624500108022500586).cmplx(), ComplexExactRepr(4599676419421066578,-4843621399236968448).cmplx(), ComplexExactRepr(4599676419421066584,4369031152104747917).cmplx(), ComplexExactRepr(-4628199217061079725,4598871928832275232).cmplx(), ComplexExactRepr(-4628199217061079716,-4624500108022500590).cmplx(), ComplexExactRepr(-4628199217061079726,4598871928832275231).cmplx(), ComplexExactRepr(-4628199217061079710,-4624500108022500584).cmplx(), ComplexExactRepr(4599676419421066580,-4843485688731708848).cmplx(),
+ComplexExactRepr(4599676419421066574,-4862536369561411626).cmplx(), ComplexExactRepr(-4628199217061079731,4598871928832275230).cmplx(), ComplexExactRepr(-4628199217061079706,-4624500108022500585).cmplx(), ComplexExactRepr(-4628199217061079716,4598871928832275228).cmplx(), ComplexExactRepr(-4628199217061079718,-4624500108022500580).cmplx(), ComplexExactRepr(4599676419421066580,-4845977078009082038).cmplx(), ComplexExactRepr(-4628199217061079732,4598871928832275230).cmplx(), ComplexExactRepr(-4628199217061079709,-4624500108022500588).cmplx(), ComplexExactRepr(4599676419421066578,-4842495499330125824).cmplx();
+
+
+    Eigen::Matrix<std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> Mprime =
+        C * M * C.adjoint();
+
+    for (auto _ : state) {
+        bool result = isCliffordConjugateGeneralized(d, n, M, Mprime, std::make_optional(seedValue));
+        if (!result) {
+            const std::string failMsg = "Unexpected Clifford-conjugate failure";
+            state.SkipWithError(failMsg);
+            break; // REQUIRED to prevent all further iterations.
+        }
+        benchmark::DoNotOptimize(result);
+    }
+    state.SetComplexityN(d);
+}
+
 void BM_CliffordConjugateTest2Qudits_ExtremelySlow2(benchmark::State& state) {
     const int d = 3;
     const size_t n = 2;
@@ -426,6 +467,12 @@ int main(int argc, char** argv) {
     benchmark::RegisterBenchmark(
             "BM_CliffordConjugateTest2Qudits_ExtremelySlow2",
             BM_CliffordConjugateTest2Qudits_ExtremelySlow2)
+            // ->Threads(32)
+            ->Unit(benchmark::kNanosecond);
+
+    benchmark::RegisterBenchmark(
+            "BM_CliffordConjugateTest2Qudits_ExtremelySlow3",
+            BM_CliffordConjugateTest2Qudits_ExtremelySlow3)
             // ->Threads(32)
             ->Unit(benchmark::kNanosecond);
 

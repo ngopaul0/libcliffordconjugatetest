@@ -302,6 +302,8 @@ inline bool isSymplectic(const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynami
     return modMatrix(S.transpose() * Omega * S, d) == Omega;
 }
 
+constexpr size_t thresholdForParallelInnerProductComputation = 64;
+
 /**
  * Given two sets U = MMap(key) and V = MprimeMap(key) = S(U), tests whether u in U can be mapped to
  * uMap in V by S, where U, V are subsets of Z_d^(2n).
@@ -387,6 +389,46 @@ bool testMapping(const FMap& MMap, const FMap& MprimeMap, const MatrixCoordinate
     ss_vVec << uMap;
     auto sVvec = ss_vVec.str();
 #endif
+
+    // avoid using atomic_size_t if OPENMP is missing
+#ifdef _OPENMP
+    // TODO: Explicitly enable nested parallelism
+    if (U.size() >= thresholdForParallelInnerProductComputation) {
+        std::vector<std::atomic_size_t> innerProductHistogramForU(d);
+        std::vector<std::atomic_size_t> innerProductHistogramForV(d);
+        // clang-format off
+        #pragma omp parallel shared(innerProductHistogramForU, innerProductHistogramForV)
+        {
+            // clang-format off
+            #pragma omp for nowait
+            for (int i = 0; i < U.size(); ++i) {
+                const auto& u_i = U[i];
+                const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& innerProduct =
+                    u.transpose() * Omega * u_i;
+                if (innerProduct.rows() != 1 && innerProduct.cols() != 1) {
+                    throw std::runtime_error("bad symplectic inner product shape");
+                }
+                const long innerProdVal = safeMod(innerProduct(0, 0), d);
+                ++innerProductHistogramForU[innerProdVal];
+            }
+
+            // clang-format off
+            #pragma omp for
+            for (int i = 0; i < V.size(); ++i) {
+                const auto& v_i = V[i];
+                const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& innerProduct =
+                    uMap.transpose() * Omega * v_i;
+                if (innerProduct.rows() != 1 && innerProduct.cols() != 1) {
+                    throw std::runtime_error("bad symplectic inner product shape");
+                }
+                const long innerProdVal = safeMod(innerProduct(0, 0), d);
+                ++innerProductHistogramForV[innerProdVal];
+            }
+        }
+        return innerProductHistogramForU == innerProductHistogramForV;
+    }
+#endif
+
     std::vector<size_t> innerProductHistogramForU(d);
     for (const auto& u_i : U) {
         const Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>& innerProduct =
@@ -411,7 +453,6 @@ bool testMapping(const FMap& MMap, const FMap& MprimeMap, const MatrixCoordinate
             return false;
         }
     }
-
     return innerProductHistogramForU == innerProductHistogramForV;
 }
 
@@ -427,8 +468,6 @@ void appendToSystemForMappingsCheck(
     existingRREFSystem.conservativeResize(existingRREFSystem.rows() + 1, Eigen::NoChange);
     existingRREFSystem.row(existingRREFSystem.rows() - 1) = v.transpose();
 }
-
-constexpr size_t thresholdForParallelInnerProductComputation = 64;
 
 template <typename MatrixType>
 std::vector<std::vector<std::vector<size_t>>>
@@ -485,11 +524,13 @@ getPossibleMappings(const FMap& MMap, const FMap& MprimeMap, const MatrixType& O
             }
 
             if (vMapPossibilities.size() > thresholdForParallelInnerProductComputation) {
-#pragma omp parallel for shared(possibleMappings) schedule(dynamic)
-                for (size_t vMapIndex = 0; vMapIndex < vMapPossibilities.size(); ++vMapIndex) {
+                // clang-format off
+                #pragma omp parallel for shared(possibleMappings) schedule(dynamic)
+                for (int vMapIndex = 0; vMapIndex < vMapPossibilities.size(); ++vMapIndex) {
                     const auto& vMapPossible = vMapPossibilities[vMapIndex];
                     if (testMapping(MMap, MprimeMap, vHere, vMapPossible, keyForBin, Omega, d)) {
-#pragma omp critical(possibleMappings)
+                        // clang-format off
+                        #pragma omp critical(possibleMappings)
                         {
                             possibleMappings[binIndex][vIndex].push_back(vMapIndex);
                         }

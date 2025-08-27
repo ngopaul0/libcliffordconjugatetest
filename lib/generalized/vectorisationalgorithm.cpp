@@ -200,7 +200,10 @@ class RecursionContext {
         if (possibleMappings_.empty()) {
             auto mappings =
                 getPossibleMappings(Mmap_, Mprimemap_, omegaSymplecticForm_, d_, n_, sortedKeys_);
-            possibleMappings_ = std::move(mappings);
+            if (!mappings) {
+                return std::nullopt;
+            }
+            possibleMappings_ = std::move(*mappings);
         }
 
         constexpr size_t sortedKeysStartIndex = 0;

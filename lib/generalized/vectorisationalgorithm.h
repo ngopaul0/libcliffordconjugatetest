@@ -1,8 +1,6 @@
 #ifndef VECTORISATIONALGORITHM_H
 #define VECTORISATIONALGORITHM_H
 
-#include <unordered_set>
-
 #include "unsupported/Eigen/KroneckerProduct"
 #include <Eigen/Dense>
 #include "internal/FMap.h"
@@ -393,6 +391,7 @@ bool testMapping(const FMap& MMap, const FMap& MprimeMap, const MatrixCoordinate
     // avoid using atomic_size_t if OPENMP is missing
 #ifdef _OPENMP
     // TODO: Explicitly enable nested parallelism
+    // TODO: Refactor this to be more clean
     if (U.size() >= thresholdForParallelInnerProductComputation) {
         std::vector<std::atomic_size_t> innerProductHistogramForU(d);
         std::vector<std::atomic_size_t> innerProductHistogramForV(d);
@@ -470,7 +469,7 @@ void appendToSystemForMappingsCheck(
 }
 
 template <typename MatrixType>
-std::vector<std::vector<std::vector<size_t>>>
+std::optional<std::vector<std::vector<std::vector<size_t>>>>
 getPossibleMappings(const FMap& MMap, const FMap& MprimeMap, const MatrixType& Omega,
                     const size_t d, const size_t n, const std::vector<FMapKey>& sortedKeys) {
     std::vector<std::vector<std::vector<size_t>>> possibleMappings(sortedKeys.size());
@@ -480,14 +479,19 @@ getPossibleMappings(const FMap& MMap, const FMap& MprimeMap, const MatrixType& O
     size_t vectorsMapped = 0;
     std::optional<Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic>> system;
     size_t lastRank = 0;
+
+    const size_t vectorsNeededForBasis = 2 * n;
+
     for (size_t binIndex = 0; binIndex < sortedKeys.size(); ++binIndex) {
         assert(possibleMappings[binIndex].empty());
 
         const auto& keyForBin = sortedKeys[binIndex];
         const auto& allV = MMap.get(keyForBin);
 
+        // Reserve enough vectors. Use a resize to insert an empty slot for each v index. We expect
+        // at least 2n vectors.
         const auto numVecsInThisBin = allV.size();
-        const auto numVecsLeft = vectorsMapped > 2 * n ? 0 : 2 * n - vectorsMapped;
+        const auto numVecsLeft = vectorsMapped > vectorsNeededForBasis ? 0 : vectorsNeededForBasis - vectorsMapped;
         const auto numPossibleVecsFromThisV = std::min(numVecsLeft, numVecsInThisBin);
         if (numPossibleVecsFromThisV > 0) {
             possibleMappings[binIndex].resize(numPossibleVecsFromThisV);
@@ -498,7 +502,8 @@ getPossibleMappings(const FMap& MMap, const FMap& MprimeMap, const MatrixType& O
             const MatrixCoordinate& vHere = allV[vIndex];
             assert(vIndex <= possibleMappings[binIndex].size());
 
-            // check if access by vIndex would be invalid
+            // Check if access by vIndex would be invalid. We would be here if we ran into false
+            // positives.
             if (vIndex == possibleMappings[binIndex].size()) {
                 possibleMappings[binIndex].emplace_back();
                 assert(vIndex == possibleMappings[binIndex].size() - 1);
@@ -544,17 +549,20 @@ getPossibleMappings(const FMap& MMap, const FMap& MprimeMap, const MatrixType& O
                     }
                 }
             }
-
-            assert(!possibleMappings[binIndex][vIndex].empty());
+            // If u couldn't be mapped to anything at all, then the necessary condition failed for all (u, v) pairs for
+            // all v in V
+            if (possibleMappings[binIndex][vIndex].empty()) {
+                return std::nullopt;
+            }
             vectorsMapped++;
 
-            if (thisRank == 2 * n) {
-                return possibleMappings;
+            if (thisRank == vectorsNeededForBasis) {
+                return std::make_optional(possibleMappings);
             }
         }
     }
 
-    return possibleMappings;
+    return std::make_optional(possibleMappings);
 }
 
 size_t returnLastNumRecursiveCalls();

@@ -1,12 +1,13 @@
 import sys
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.ticker import LogLocator
 import numpy as np
 import csv
 import os
 
 use_log_scale = True
-max_val_filter = 20
+max_val_filter = None
 num_bins = 100
 
 sortCsv = False
@@ -87,12 +88,22 @@ else:
 # Plot histogram
 plt.figure(figsize=(10,6))
 plt.hist(durations, bins=bins, edgecolor='black')
+
+
 if use_log_scale:
     plt.xscale('log')
     plt.xlabel('Duration (milliseconds, log scale)')
+    plt.xticks([1,2,4,8], ['1', '2', '4', '8'])
+    #ax = plt.gca()
+    #ax.xaxis.set_major_locator(ticker.LogLocator(base=10.0))
+    #ax.xaxis.set_major_locator(LogLocator(base=3.0, subs=(1.0,), numticks=10))
+    #ax.xaxis.set_minor_locator(LogLocator(base=3.0, subs=(1.0,), numticks=10))
+    #ax.xaxis.set_minor_locator(LogLocator(base=10.0, subs=np.arange(2, 10)*0.1, numticks=10))
+
 else:
     plt.xlabel('Duration (milliseconds)')
 plt.ylabel('Frequency')
+plt.minorticks_on()
 
 plt.title(f'Histogram for Clifford-conjugate test on M = W(p,q) for all Clifford (d=3, n=2){title_suffix}')
 plt.grid(True, linestyle='--', alpha=0.6)

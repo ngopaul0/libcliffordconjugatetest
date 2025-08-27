@@ -36,14 +36,14 @@
 #include "internal/complexexactrepr.h"
 #include "internal/util.h"
 
-#define ENABLE_OPENMP_MULTITHREADING 1
+#define ENABLE_OPENMP_MULTITHREADING 0
 #define ENABLE_KEY_SHUFFLE 1
 
 constexpr std::optional<size_t> customStartIndex = std::nullopt;
 
 constexpr size_t counterThresholdForPrintAndHistogramWrite = 20000;
 
-constexpr bool showEveryMatrixWhenMultithreadingDisabled = true;
+constexpr bool showEveryMatrixWhenMultithreadingDisabled = false;
 
 // From Google Benchmark
 template <typename T>

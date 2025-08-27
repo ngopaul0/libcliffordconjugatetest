@@ -4,6 +4,7 @@
 #include <include/npy.hpp>
 #include <internal/util.h>
 #include <iostream>
+#include <numeric>
 #include <random>
 
 #include "unsupported/Eigen/KroneckerProduct"
@@ -409,8 +410,6 @@ void BM_CliffordConjugateTest2Qudits_BruteForce(benchmark::State& state) {
     std::vector<size_t> indices(numMatrices);
     // fill with indices
     std::iota(indices.begin(), indices.end(), 0);
-    //std::ranges::shuffle(indices, gen);
-
 
     for (auto _ : state) {
         bool result = bruteForceTest(d, omega, M, Mprime, indices);
@@ -422,15 +421,6 @@ void BM_CliffordConjugateTest2Qudits_BruteForce(benchmark::State& state) {
         benchmark::DoNotOptimize(result);
     }
     state.SetComplexityN(d);
-}
-
-static void BM_SortComplexity(benchmark::State& state) {
-    std::vector<int> data(state.range(0));
-    for (auto& x: data) x = rand();
-    for (auto _: state) {
-        std::sort(data.begin(), data.end());
-    }
-    state.SetComplexityN(state.range(0));
 }
 
 // Custom main function to register and run the benchmarks.
@@ -489,14 +479,6 @@ int main(int argc, char** argv) {
             BM_CliffordConjugateTest)
             ->Range(0, prime_count - 1)
             ->Complexity();
-
-    //for (int i = 1; i < 10; i++) {
-        benchmark::RegisterBenchmark(
-            "BM_SortComplexity",
-            BM_SortComplexity)
-            ->Range(1, 10)
-            ->Complexity();
-    //}
 
     /*
     const char* custom_argv[] = {

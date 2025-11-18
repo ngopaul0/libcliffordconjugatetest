@@ -24,6 +24,7 @@ using namespace boost::accumulators;
 // validates the symplectic inner product function against the naive multiplication x^t Omega y
 #define CHECK_SYMPLECTIC_INNER_PRODUCT false
 #define FINE_GRAINED_RESULT_WRITING true
+#define SIMULATE_BASIS_FINDING true
 
 void modReduce(Eigen::MatrixXi& M, int d) {
     for (int i = 0; i < M.rows(); ++i) {
@@ -405,10 +406,12 @@ std::pair<std::vector<size_t>, std::vector<size_t>> runTrial(
     const auto start = std::chrono::steady_clock::now();
     auto lastPrintTime = std::chrono::high_resolution_clock::now();
 
+    const size_t vectors_to_take = SIMULATE_BASIS_FINDING ? 2 * n : U.size();
+
 // making it parallel here is not close to how the algorithm is done in practice, since the u's
 // are normally checked for linear independence in order to form a basis of 2n vectors
 // #pragma omp parallel for schedule(dynamic)
-    for (size_t u_index = 0; u_index < U.size(); ++u_index) {
+    for (size_t u_index = 0; u_index < vectors_to_take; ++u_index) {
         auto startTime = std::chrono::high_resolution_clock::now();
 
         auto count = count_necessary_cond_accepts(d, U, V, omega, u_index);
@@ -418,11 +421,13 @@ std::pair<std::vector<size_t>, std::vector<size_t>> runTrial(
         all_counts[u_index] = count;
         all_times[u_index] = us.count();
 
+#if !SIMULATE_BASIS_FINDING
         auto thisTime = std::chrono::high_resolution_clock::now();
         auto msSinceLastPrint = std::chrono::duration_cast<std::chrono::milliseconds>(thisTime - lastPrintTime);
         if (u_index == 0 || msSinceLastPrint.count() > 50) {
-            printing::print_progress(u_index + 1, U.size(), start);
+            printing::print_progress(u_index + 1, vectors_to_take, start);
         }
+#endif
 
 #if FINE_GRAINED_RESULT_WRITING
         if (std::ofstream resultFile(output_results_filename, std::ios::app); resultFile) {
@@ -433,7 +438,9 @@ std::pair<std::vector<size_t>, std::vector<size_t>> runTrial(
 #endif
 
     }
+#if !SIMULATE_BASIS_FINDING
     printing::print_progress(0, 1, start, true);
+#endif
 
     for (const auto& count : all_counts) {
         counts(count);
@@ -442,15 +449,16 @@ std::pair<std::vector<size_t>, std::vector<size_t>> runTrial(
         times(time);
     }
 
+#if !SIMULATE_BASIS_FINDING
     auto the_mean = mean(times);
     double mean_time_to_display = the_mean > 1000 ? the_mean / 1000 : the_mean;
     std::string unit = the_mean > 1000 ? "ms" : "us";
-
     std::cout << "Trial done. Max " << max(counts) <<
         ", min " << min(counts) <<
         ", mean " << mean(counts) <<
         ", variance " << variance(counts) <<
         ", mean time per vector in U " << mean_time_to_display << unit << std::endl;
+#endif
 
     return std::make_pair(all_counts, all_times);
 }
@@ -461,7 +469,7 @@ int main(int argc, char** argv) {
     int d = 2;
     int n = 4;
     int k = 4;
-    int num_trials = 100;
+    int num_trials = SIMULATE_BASIS_FINDING ? 200 : 100;
     if (argc == 1) {
         // defaults defined above
     } else if (argc == 4 || argc == 5) {
@@ -484,6 +492,7 @@ int main(int argc, char** argv) {
     std::cout << "d = " << d << ", n = " << n << ", k = " << k << std::endl;
     std::cout << "Size of Z_d^(2n): " << vector_space_size << std::endl;
     std::cout << "Size of U (|Z_d^(2n)| - k): " << set_size << std::endl;
+    std::cout << "Running " << num_trials << " trials where " << (SIMULATE_BASIS_FINDING ? (2 * n) : set_size) << " vectors are selected in each" << std::endl;
 
     const Eigen::MatrixXi Omega = symplectic::canonicalSymplecticForm(n, d);
 
@@ -496,7 +505,10 @@ int main(int argc, char** argv) {
         std::stringstream ss_filename;
         const auto startUnixEpochMs =  std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::high_resolution_clock::now().time_since_epoch());
-        ss_filename << "necesscondtrial" << "-d" << d << "n" << n << "k" << k << "trials" << num_trials << "-" << startUnixEpochMs.count() << ".csv";
+        const std::string basis_finding_str = SIMULATE_BASIS_FINDING ? "bf" : "";
+        ss_filename << "necesscondtrial" << "-d" << d << "n" << n
+            << "k" << k << "trials" << num_trials
+            << basis_finding_str << "-" << startUnixEpochMs.count() << ".csv";
         output_results_filename = ss_filename.str();
 
         if (std::ofstream file(output_results_filename); file) {
@@ -505,8 +517,11 @@ int main(int argc, char** argv) {
             std::cerr << "Failed to open file for writing" << std::endl;
         }
     }
+    std::cout << "Writing results to " << output_results_filename << std::endl;
 
-    for (int i = 0; i < num_trials; i++) {
+    const auto start = std::chrono::steady_clock::now();
+
+    for (int trial_num = 0; trial_num < num_trials; trial_num++) {
         std::mt19937 rng;
         Eigen::MatrixXi S = symplectic::randomSymplecticMatrix(n, d, rng, 40);
         std::vector<Eigen::MatrixXi> U = sampling::random_distinct_vectors_Zd(d, n, set_size);
@@ -542,6 +557,10 @@ int main(int argc, char** argv) {
         }
         maximums(the_max);
 
+#if SIMULATE_BASIS_FINDING
+        printing::print_progress(trial_num + 1, num_trials, start);
+#endif
+
 #if !FINE_GRAINED_RESULT_WRITING
         if (std::ofstream resultFile(output_results_filename, std::ios::app); resultFile) {
             for (size_t idx = 0; idx < counts.size(); idx++) {
@@ -555,6 +574,9 @@ int main(int argc, char** argv) {
 #endif
 
     }
+#if SIMULATE_BASIS_FINDING
+    printing::print_progress(0, 1, start, true);
+#endif
     std::cout << num_trials << " trials all done. " <<
         "Highest maximum: " << max(maximums) <<
             ", lowest maximum: " << min(maximums) <<

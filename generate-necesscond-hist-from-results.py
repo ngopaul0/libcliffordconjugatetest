@@ -29,7 +29,7 @@ if m:
     the_n = m["n"]
     the_k = m["k"]
     the_bin_size = str(pow(int(the_d), 2 * int(the_n)) - int(the_k))
-print(f"Bin size is {the_bin_size}")
+print(f"d {the_d}, n {the_n}, k {the_k}, Bin size is {the_bin_size}")
 
 if sortCsv:
     # Read CSV and sort by CliffordIndex

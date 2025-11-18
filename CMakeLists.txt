@@ -9,6 +9,7 @@ add_subdirectory(lib)
 enable_testing()
 add_subdirectory(unittest)
 add_subdirectory(multiqudittest)
+add_subdirectory(necessarycondtests)
 
 add_subdirectory(benchmarksinglequdit)
 add_subdirectory(benchmarkmultiqudit)

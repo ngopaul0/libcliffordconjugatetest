@@ -23,6 +23,7 @@ using namespace boost::accumulators;
 
 // validates the symplectic inner product function against the naive multiplication x^t Omega y
 #define CHECK_SYMPLECTIC_INNER_PRODUCT false
+#define FINE_GRAINED_RESULT_WRITING true
 
 void modReduce(Eigen::MatrixXi& M, int d) {
     for (int i = 0; i < M.rows(); ++i) {
@@ -255,17 +256,17 @@ inline void print_progress(std::uint64_t current,
                            std::size_t bar_width = 40) {
     static std::size_t prev_len = 0;
 
-    if (clearLine && prev_len > 0) {
-        // Write line in-place
-        std::cout << '\r';
-        std::cout << std::string(prev_len, ' ');
-        std::cout << std::flush;
-        prev_len = 0;
+    if (clearLine) {
+        if (prev_len > 0) {
+            std::cout << '\r' << std::string(prev_len, ' ') << '\r' << std::flush;
+            prev_len = 0;
+        }
+        return;
     }
 
     if (total == 0) return;
 
-    double ratio = std::min<double>(1.0, double(current) / double(total));
+    double ratio = std::min<double>(1.0, static_cast<double>(current) / static_cast<double>(total));
     int filled = static_cast<int>(std::round(ratio * bar_width));
 
     auto now = std::chrono::steady_clock::now();
@@ -302,10 +303,10 @@ inline void print_progress(std::uint64_t current,
     std::cout << std::flush;
     prev_len = line.size();
 
-    if (current >= total) {
-        std::cout << '\n';
-        prev_len = 0;
-    }
+    //if (current >= total) {
+    //    std::cout << '\n';
+    //    prev_len = 0;
+    //}
 }
 
 } // namespace printing
@@ -377,37 +378,21 @@ size_t count_necessary_cond_accepts(
     auto u_now = U[u_index];
     std::atomic_size_t count = 0;
 
-    const auto start = std::chrono::steady_clock::now();
-    auto lastPrintTime = std::chrono::high_resolution_clock::now();
-    std::mutex mu;
 #pragma omp parallel for schedule(dynamic)
     for (size_t i = 0; i < U.size(); i++) {
         const auto& v = V[i];
         // tests whether v = S*u is possible via necessary condition
         if (necessary_condition_check(d, U, V, omega, u_now, v)) {
             ++count;
-
-            std::size_t count_now = count;
-            auto thisTime = std::chrono::high_resolution_clock::now();
-            const auto lastPrintTimeNow = lastPrintTime;
-            auto msSinceLastPrint = std::chrono::duration_cast<std::chrono::milliseconds>(thisTime - lastPrintTime);
-            if (msSinceLastPrint.count() > 2) {
-                std::lock_guard lk(mu);
-                if (lastPrintTimeNow == lastPrintTime) {
-                    lastPrintTime = std::chrono::high_resolution_clock::now();
-                    printing::print_progress(count_now, U.size(), start);
-                }
-            }
         }
     }
-    printing::print_progress(0, 1, start, true);
 
     return count;
 }
 
 std::pair<std::vector<size_t>, std::vector<size_t>> runTrial(
     int n, int d, const std::vector<Eigen::MatrixXi>& U, const std::vector<Eigen::MatrixXi>& V,
-    const Eigen::MatrixXi& omega
+    const Eigen::MatrixXi& omega, const std::string& output_results_filename
 ) {
     accumulator_set<unsigned long long, stats<tag::mean, tag::variance, tag::min, tag::max, tag::count>>
         counts;
@@ -416,6 +401,10 @@ std::pair<std::vector<size_t>, std::vector<size_t>> runTrial(
 
     std::vector<size_t> all_counts(U.size());
     std::vector<size_t> all_times(U.size());
+
+    const auto start = std::chrono::steady_clock::now();
+    auto lastPrintTime = std::chrono::high_resolution_clock::now();
+
 // making it parallel here is not close to how the algorithm is done in practice, since the u's
 // are normally checked for linear independence in order to form a basis of 2n vectors
 // #pragma omp parallel for schedule(dynamic)
@@ -428,7 +417,23 @@ std::pair<std::vector<size_t>, std::vector<size_t>> runTrial(
         auto us = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
         all_counts[u_index] = count;
         all_times[u_index] = us.count();
+
+        auto thisTime = std::chrono::high_resolution_clock::now();
+        auto msSinceLastPrint = std::chrono::duration_cast<std::chrono::milliseconds>(thisTime - lastPrintTime);
+        if (u_index == 0 || msSinceLastPrint.count() > 50) {
+            printing::print_progress(u_index + 1, U.size(), start);
+        }
+
+#if FINE_GRAINED_RESULT_WRITING
+        if (std::ofstream resultFile(output_results_filename, std::ios::app); resultFile) {
+            resultFile << count << "," << us.count() << std::endl;
+        } else {
+            std::cerr << "Failed to open " << output_results_filename << " for writing" << std::endl;
+        }
+#endif
+
     }
+    printing::print_progress(0, 1, start, true);
 
     for (const auto& count : all_counts) {
         counts(count);
@@ -523,7 +528,9 @@ int main(int argc, char** argv) {
 
         assert(U.size() == V.size());
 
-        auto [counts, times] = runTrial(n, d, U, V, Omega);
+        auto [counts, times] = runTrial(n, d, U, V, Omega,
+            output_results_filename);
+
         if (counts.size() != times.size()) {
             throw std::invalid_argument("counts size different from times");
         }
@@ -535,6 +542,7 @@ int main(int argc, char** argv) {
         }
         maximums(the_max);
 
+#if !FINE_GRAINED_RESULT_WRITING
         if (std::ofstream resultFile(output_results_filename, std::ios::app); resultFile) {
             for (size_t idx = 0; idx < counts.size(); idx++) {
                 auto count = counts[idx];
@@ -544,8 +552,9 @@ int main(int argc, char** argv) {
         } else {
             std::cerr << "Failed to open " << output_results_filename << " for writing" << std::endl;
         }
-    }
+#endif
 
+    }
     std::cout << num_trials << " trials all done. " <<
         "Highest maximum: " << max(maximums) <<
             ", lowest maximum: " << min(maximums) <<

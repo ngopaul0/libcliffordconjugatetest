@@ -392,8 +392,11 @@ size_t count_necessary_cond_accepts(
 }
 
 std::pair<std::vector<size_t>, std::vector<size_t>> runTrial(
-    int n, int d, const std::vector<Eigen::MatrixXi>& U, const std::vector<Eigen::MatrixXi>& V,
-    const Eigen::MatrixXi& omega, const std::string& output_results_filename
+    size_t trial_index, size_t num_trials,
+    const std::chrono::steady_clock::time_point& trials_start_time,
+    int n, int d, const std::vector<Eigen::MatrixXi>& U,
+    const std::vector<Eigen::MatrixXi>& V, const Eigen::MatrixXi& omega,
+    const std::string& output_results_filename
 ) {
     accumulator_set<unsigned long long, stats<tag::mean, tag::variance, tag::min, tag::max, tag::count>>
         counts;
@@ -403,10 +406,15 @@ std::pair<std::vector<size_t>, std::vector<size_t>> runTrial(
     std::vector<size_t> all_counts(U.size());
     std::vector<size_t> all_times(U.size());
 
-    const auto start = std::chrono::steady_clock::now();
+    const std::chrono::time_point<std::chrono::steady_clock> start =
+        std::chrono::steady_clock::now();
     auto lastPrintTime = std::chrono::high_resolution_clock::now();
 
     const size_t vectors_to_take = SIMULATE_BASIS_FINDING ? 2 * n : U.size();
+
+#if SIMULATE_BASIS_FINDING
+    const size_t vectors_done_already = vectors_to_take * trial_index;
+#endif
 
 // making it parallel here is not close to how the algorithm is done in practice, since the u's
 // are normally checked for linear independence in order to form a basis of 2n vectors
@@ -421,13 +429,17 @@ std::pair<std::vector<size_t>, std::vector<size_t>> runTrial(
         all_counts[u_index] = count;
         all_times[u_index] = us.count();
 
-#if !SIMULATE_BASIS_FINDING
         auto thisTime = std::chrono::high_resolution_clock::now();
         auto msSinceLastPrint = std::chrono::duration_cast<std::chrono::milliseconds>(thisTime - lastPrintTime);
         if (u_index == 0 || msSinceLastPrint.count() > 50) {
+
+#if SIMULATE_BASIS_FINDING
+            printing::print_progress(vectors_done_already + u_index + 1,
+                vectors_to_take * num_trials, trials_start_time);
+#else
             printing::print_progress(u_index + 1, vectors_to_take, start);
-        }
 #endif
+        }
 
 #if FINE_GRAINED_RESULT_WRITING
         if (std::ofstream resultFile(output_results_filename, std::ios::app); resultFile) {
@@ -521,6 +533,8 @@ int main(int argc, char** argv) {
 
     const auto start = std::chrono::steady_clock::now();
 
+    std::size_t vector_count = 0;
+
     for (int trial_num = 0; trial_num < num_trials; trial_num++) {
         std::mt19937 rng;
         Eigen::MatrixXi S = symplectic::randomSymplecticMatrix(n, d, rng, 40);
@@ -543,8 +557,10 @@ int main(int argc, char** argv) {
 
         assert(U.size() == V.size());
 
-        auto [counts, times] = runTrial(n, d, U, V, Omega,
-            output_results_filename);
+        auto [counts, times] = runTrial(trial_num, num_trials,
+            start, n, d, U, V, Omega, output_results_filename);
+
+        vector_count += counts.size();
 
         if (counts.size() != times.size()) {
             throw std::invalid_argument("counts size different from times");
@@ -557,9 +573,6 @@ int main(int argc, char** argv) {
         }
         maximums(the_max);
 
-#if SIMULATE_BASIS_FINDING
-        printing::print_progress(trial_num + 1, num_trials, start);
-#endif
 
 #if !FINE_GRAINED_RESULT_WRITING
         if (std::ofstream resultFile(output_results_filename, std::ios::app); resultFile) {
@@ -577,7 +590,12 @@ int main(int argc, char** argv) {
 #if SIMULATE_BASIS_FINDING
     printing::print_progress(0, 1, start, true);
 #endif
-    std::cout << num_trials << " trials all done. " <<
+
+    auto now = std::chrono::steady_clock::now();
+    double elapsed = std::chrono::duration<double>(now - start).count();
+
+    std::cout << num_trials << " trials (" << vector_count <<  " vectors ) all done in "
+        << printing::fmt_hms(elapsed) << std::endl <<
         "Highest maximum: " << max(maximums) <<
             ", lowest maximum: " << min(maximums) <<
             ", variance maximum: " << variance(maximums) <<

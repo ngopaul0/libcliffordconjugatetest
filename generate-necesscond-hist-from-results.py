@@ -19,7 +19,7 @@ if len(sys.argv) < 2:
 
 filename = sys.argv[1]
 filename_stripped = os.path.basename(filename)
-m = re.search(r"-d(?P<d>\d+)n(?P<n>\d+)k(?P<k>\d+)trials(?P<trials>\d+)\b", filename_stripped)
+m = re.search(r"-d(?P<d>\d+)n(?P<n>\d+)k(?P<k>\d+)trials(?P<trials>\d+)(bf)?\b", filename_stripped)
 the_d = "unknown"
 the_n = "unknown"
 the_k = "unknown"

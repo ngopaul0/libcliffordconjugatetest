@@ -219,6 +219,17 @@ struct FMapEntry {
         coords = std::move(new_coords);
         n = std::move(new_n);
     }
+
+    friend std::ostream& operator<<(std::ostream& os, const FMapEntry& obj) {
+        os << "FMapEntry(";
+        for (const auto& coord : obj.coords) {
+            std::stringstream ss;
+            ss << coord;
+            os << ss.str() << ";" << std::endl;
+        }
+        os << ")";
+        return os;
+    }
 };
 
 struct FMap {
@@ -343,6 +354,13 @@ struct FMap {
         std::ranges::sort(
             keys, [this](const FMapKey& a, const FMapKey& b) { return getCount(a) < getCount(b); });
         return keys;
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const FMap& obj) {
+        for (const auto& [key, entry] : obj.map_) {
+            os << key << ":" << entry;
+        }
+        return os;
     }
 };
 

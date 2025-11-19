@@ -392,7 +392,7 @@ bool testMapping(const FMap& MMap, const FMap& MprimeMap, const MatrixCoordinate
 #ifdef _OPENMP
     // TODO: Explicitly enable nested parallelism
     // TODO: Refactor this to be more clean
-    if (U.size() >= thresholdForParallelInnerProductComputation) {
+    if (false && U.size() >= thresholdForParallelInnerProductComputation) {
         std::vector<std::atomic_size_t> innerProductHistogramForU(d);
         std::vector<std::atomic_size_t> innerProductHistogramForV(d);
         // clang-format off
@@ -449,10 +449,20 @@ bool testMapping(const FMap& MMap, const FMap& MprimeMap, const MatrixCoordinate
         const long innerProdVal = safeMod(innerProduct(0, 0), d);
         innerProductHistogramForV[innerProdVal] += 1;
         if (innerProductHistogramForV[innerProdVal] > innerProductHistogramForU[innerProdVal]) {
-            return false;
+            // return false;
         }
     }
-    return innerProductHistogramForU == innerProductHistogramForV;
+
+    std::stringstream ssFMap;
+    ssFMap << MMap;
+    auto sFMap = ssFMap.str();
+
+    std::stringstream ssFPrimeMap;
+    ssFPrimeMap << MprimeMap;
+    auto sFMprimeap = ssFPrimeMap.str();
+
+    const bool result = innerProductHistogramForU == innerProductHistogramForV;
+    return result;
 }
 
 template <typename VectorType>
@@ -528,7 +538,7 @@ getPossibleMappings(const FMap& MMap, const FMap& MprimeMap, const MatrixType& O
                 lastRank = thisRank;
             }
 
-            if (vMapPossibilities.size() > thresholdForParallelInnerProductComputation) {
+            if (false && vMapPossibilities.size() > thresholdForParallelInnerProductComputation) {
                 // clang-format off
                 #pragma omp parallel for shared(possibleMappings) schedule(dynamic)
                 for (int vMapIndex = 0; vMapIndex < vMapPossibilities.size(); ++vMapIndex) {
@@ -548,6 +558,14 @@ getPossibleMappings(const FMap& MMap, const FMap& MprimeMap, const MatrixType& O
                         possibleMappings[binIndex][vIndex].push_back(vMapIndex);
                     }
                 }
+                std::stringstream ssHere;
+                for (const auto& vMapIndex : possibleMappings[binIndex][vIndex]) {
+                    const auto vMapPossibleHere = vMapPossibilities[vMapIndex];
+
+                    ssHere << vMapPossibleHere << ";" << std::endl;
+                }
+                auto s = ssHere.str();
+                std::stringstream ssHere2;
             }
             // If u couldn't be mapped to anything at all, then the necessary condition failed for all (u, v) pairs for
             // all v in V

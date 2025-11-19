@@ -144,9 +144,10 @@ inline size_t symplecticProduct(size_t d, int p, int q, int pPrime, int qPrime) 
     return safeMod(p * qPrime - pPrime * q, d);
 }
 
-inline size_t
-symplecticProductMultiQudit(size_t d, const Eigen::Vector<long, Eigen::Dynamic>& pq_vec,
-                            const Eigen::Vector<long, Eigen::Dynamic>& pPrime_qPrime_vec) {
+template <typename Derived>
+size_t
+symplecticProductMultiQudit(size_t d, const Eigen::MatrixBase<Derived>& pq_vec,
+                            const Eigen::MatrixBase<Derived>& pPrime_qPrime_vec) {
     assert(pq_vec.rows() == pPrime_qPrime_vec.rows());
     const size_t twoTimes_n = pq_vec.rows();
     assert(twoTimes_n % 2 == 0);

@@ -8,8 +8,6 @@ target_link_libraries(necessarycondtests PRIVATE cliffordconjugatetest)
 target_link_libraries(necessarycondtests PRIVATE ${Boost_LIBRARIES} Eigen3::Eigen)
 target_include_directories(necessarycondtests PRIVATE ${Boost_INCLUDE_DIRS} "${libnpy_SOURCE_DIR}")
 
-find_package(Boost REQUIRED)
-
 find_package(OpenMP)
 if(OpenMP_FOUND)
     message(STATUS "Linking OpenMP")

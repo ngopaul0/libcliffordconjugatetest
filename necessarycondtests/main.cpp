@@ -10,17 +10,6 @@
 
 #include "internal/cliffordgates.h"
 
-#include <boost/accumulators/accumulators.hpp>
-#include <boost/accumulators/statistics/count.hpp>
-#include <boost/accumulators/statistics/extended_p_square.hpp>
-#include <boost/accumulators/statistics/max.hpp>
-#include <boost/accumulators/statistics/mean.hpp>
-#include <boost/accumulators/statistics/min.hpp>
-#include <boost/accumulators/statistics/stats.hpp>
-#include <boost/accumulators/statistics/variance.hpp>
-
-using namespace boost::accumulators;
-
 // validates the symplectic inner product function against the naive multiplication x^t Omega y
 #define CHECK_SYMPLECTIC_INNER_PRODUCT false
 #define FINE_GRAINED_RESULT_WRITING true
@@ -398,10 +387,6 @@ std::pair<std::vector<size_t>, std::vector<size_t>> runTrial(
     const std::vector<Eigen::MatrixXi>& V, const Eigen::MatrixXi& omega,
     const std::string& output_results_filename
 ) {
-    accumulator_set<unsigned long long, stats<tag::mean, tag::variance, tag::min, tag::max, tag::count>>
-        counts;
-    accumulator_set<unsigned long long, stats<tag::mean, tag::variance, tag::min, tag::max, tag::count>>
-        times;
 
     std::vector<size_t> all_counts(U.size());
     std::vector<size_t> all_times(U.size());
@@ -451,22 +436,12 @@ std::pair<std::vector<size_t>, std::vector<size_t>> runTrial(
     printing::print_progress(0, 1, start, true);
 #endif
 
-    for (const auto& count : all_counts) {
-        counts(count);
-    }
-    for (const auto& time : all_times) {
-        times(time);
-    }
 
 #if !SIMULATE_BASIS_FINDING
     auto the_mean = mean(times);
     double mean_time_to_display = the_mean > 1000 ? the_mean / 1000 : the_mean;
     std::string unit = the_mean > 1000 ? "ms" : "us";
-    std::cout << "Trial done. Max " << max(counts) <<
-        ", min " << min(counts) <<
-        ", mean " << mean(counts) <<
-        ", variance " << variance(counts) <<
-        ", mean time per vector in U " << mean_time_to_display << unit << std::endl;
+    std::cout << "Trial " << trial_index << " done" << std::endl;
 #endif
 
     return std::make_pair(all_counts, all_times);
@@ -504,9 +479,6 @@ int main(int argc, char** argv) {
     std::cout << "Running " << num_trials << " trials where " << (SIMULATE_BASIS_FINDING ? (2 * n) : set_size) << " vectors are selected in each" << std::endl;
 
     const Eigen::MatrixXi Omega = symplectic::canonicalSymplecticForm(n, d);
-
-    accumulator_set<unsigned long long, stats<tag::mean, tag::variance, tag::min, tag::max, tag::count>>
-       maximums;
 
 
     std::string output_results_filename;
@@ -563,14 +535,6 @@ int main(int argc, char** argv) {
         if (counts.size() != times.size()) {
             throw std::invalid_argument("counts size different from times");
         }
-        size_t the_max = 0;
-        for (const auto& count : counts) {
-            if (count > the_max) {
-                the_max = count;
-            }
-        }
-        maximums(the_max);
-
 
 #if !FINE_GRAINED_RESULT_WRITING
         {
@@ -596,11 +560,7 @@ int main(int argc, char** argv) {
     double elapsed = std::chrono::duration<double>(now - start).count();
 
     std::cout << num_trials << " trials (" << vectors_finished <<  " vectors) all done in "
-        << printing::fmt_hms(elapsed) << std::endl <<
-        "Highest maximum: " << max(maximums) <<
-            ", lowest maximum: " << min(maximums) <<
-            ", variance maximum: " << variance(maximums) <<
-            ", mean of all maximums: " << mean(maximums) << std::endl;
+        << printing::fmt_hms(elapsed) << std::endl;
     std::cout << "Wrote all accepted vectors to " << output_results_filename << std::endl;
 
     return 0;

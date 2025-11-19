@@ -380,7 +380,7 @@ size_t count_necessary_cond_accepts(
     std::atomic_size_t count = 0;
 
 #pragma omp parallel for schedule(dynamic)
-    for (size_t i = 0; i < U.size(); i++) {
+    for (size_t i = 0; i < V.size(); i++) {
         const auto& v = V[i];
         // tests whether v = S*u is possible via necessary condition
         if (necessary_condition_check(d, U, V, omega, u_now, v)) {
@@ -392,7 +392,7 @@ size_t count_necessary_cond_accepts(
 }
 
 std::pair<std::vector<size_t>, std::vector<size_t>> runTrial(
-    size_t trial_index, size_t num_trials,
+    size_t trial_index, size_t num_trials, std::atomic_size_t& vectors_finished,
     const std::chrono::steady_clock::time_point& trials_start_time,
     int n, int d, const std::vector<Eigen::MatrixXi>& U,
     const std::vector<Eigen::MatrixXi>& V, const Eigen::MatrixXi& omega,
@@ -412,10 +412,6 @@ std::pair<std::vector<size_t>, std::vector<size_t>> runTrial(
 
     const size_t vectors_to_take = SIMULATE_BASIS_FINDING ? 2 * n : U.size();
 
-#if SIMULATE_BASIS_FINDING
-    const size_t vectors_done_already = vectors_to_take * trial_index;
-#endif
-
 // making it parallel here is not close to how the algorithm is done in practice, since the u's
 // are normally checked for linear independence in order to form a basis of 2n vectors
 // #pragma omp parallel for schedule(dynamic)
@@ -425,6 +421,7 @@ std::pair<std::vector<size_t>, std::vector<size_t>> runTrial(
         auto count = count_necessary_cond_accepts(d, U, V, omega, u_index);
 
         auto endTime = std::chrono::high_resolution_clock::now();
+        ++vectors_finished;
         auto us = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
         all_counts[u_index] = count;
         all_times[u_index] = us.count();
@@ -434,8 +431,8 @@ std::pair<std::vector<size_t>, std::vector<size_t>> runTrial(
         if (u_index == 0 || msSinceLastPrint.count() > 50) {
 
 #if SIMULATE_BASIS_FINDING
-            printing::print_progress(vectors_done_already + u_index + 1,
-                vectors_to_take * num_trials, trials_start_time);
+            printing::print_progress(vectors_finished,vectors_to_take * num_trials,
+                trials_start_time);
 #else
             printing::print_progress(u_index + 1, vectors_to_take, start);
 #endif
@@ -533,7 +530,10 @@ int main(int argc, char** argv) {
 
     const auto start = std::chrono::steady_clock::now();
 
-    std::size_t vector_count = 0;
+
+    std::mutex mu;
+
+    std::atomic_size_t vectors_finished = 0;
 
     for (int trial_num = 0; trial_num < num_trials; trial_num++) {
         std::mt19937 rng;
@@ -558,9 +558,7 @@ int main(int argc, char** argv) {
         assert(U.size() == V.size());
 
         auto [counts, times] = runTrial(trial_num, num_trials,
-            start, n, d, U, V, Omega, output_results_filename);
-
-        vector_count += counts.size();
+            vectors_finished, start, n, d, U, V, Omega, output_results_filename);
 
         if (counts.size() != times.size()) {
             throw std::invalid_argument("counts size different from times");
@@ -575,14 +573,17 @@ int main(int argc, char** argv) {
 
 
 #if !FINE_GRAINED_RESULT_WRITING
-        if (std::ofstream resultFile(output_results_filename, std::ios::app); resultFile) {
-            for (size_t idx = 0; idx < counts.size(); idx++) {
-                auto count = counts[idx];
-                auto meanTimeMs = times[idx];
-                resultFile << count << "," << meanTimeMs << std::endl;
+        {
+            std::lock_guard lk(mu);
+            if (std::ofstream resultFile(output_results_filename, std::ios::app); resultFile) {
+                for (size_t idx = 0; idx < counts.size(); idx++) {
+                    auto count = counts[idx];
+                    auto meanTimeMs = times[idx];
+                    resultFile << count << "," << meanTimeMs << std::endl;
+                }
+            } else {
+                std::cerr << "Failed to open " << output_results_filename << " for writing" << std::endl;
             }
-        } else {
-            std::cerr << "Failed to open " << output_results_filename << " for writing" << std::endl;
         }
 #endif
 
@@ -594,7 +595,7 @@ int main(int argc, char** argv) {
     auto now = std::chrono::steady_clock::now();
     double elapsed = std::chrono::duration<double>(now - start).count();
 
-    std::cout << num_trials << " trials (" << vector_count <<  " vectors ) all done in "
+    std::cout << num_trials << " trials (" << vectors_finished <<  " vectors) all done in "
         << printing::fmt_hms(elapsed) << std::endl <<
         "Highest maximum: " << max(maximums) <<
             ", lowest maximum: " << min(maximums) <<

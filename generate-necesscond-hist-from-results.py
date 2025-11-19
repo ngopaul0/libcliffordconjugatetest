@@ -107,6 +107,10 @@ if hist_max and not use_log_scale:
 else:
     max_to_use = vec_accept_count.max()
 
+difference = max_to_use - min_to_use
+if difference < 100:
+    num_bins = difference
+
 if use_log_scale:
     bins = np.logspace(np.log10(max(min_to_use, 0.01)), np.log10(max_to_use), num_bins)
 else:
@@ -119,7 +123,7 @@ plt.hist(vec_accept_count, bins=bins, edgecolor='black')
 
 if use_log_scale:
     plt.xscale('log')
-    plt.xlabel('Number of vectors that u in U can be mapped to (log scale)')
+    plt.xlabel('Number of vectors in the image set V that vector u in U can be mapped to (log scale)')
     plt.xticks([1,2,4,8], ['1', '2', '4', '8'])
     #ax = plt.gca()
     #ax.xaxis.set_major_locator(ticker.LogLocator(base=10.0))
@@ -128,7 +132,7 @@ if use_log_scale:
     #ax.xaxis.set_minor_locator(LogLocator(base=10.0, subs=np.arange(2, 10)*0.1, numticks=10))
 
 else:
-    plt.xlabel('Number of vectors that u in U can be mapped to')
+    plt.xlabel('Number of vectors in the image set V that vector u in U can be mapped to')
 plt.ylabel('Frequency')
 plt.minorticks_on()
 

@@ -370,7 +370,7 @@ size_t count_necessary_cond_accepts(
     std::atomic_size_t count = 0;
 
 #pragma omp parallel for schedule(dynamic)
-    for (size_t i = 0; i < V.size(); i++) {
+    for (long i = 0; i < V.size(); i++) {
         const auto& v = V[i];
         // tests whether v = S*u is possible via necessary condition
         if (necessary_condition_check(d, U, V, omega, u_now, v)) {

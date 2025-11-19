@@ -84,6 +84,7 @@ for index, percentile_marker in enumerate(percentile_markers):
     stat_string += (
         f"{percentile_marker}th percentile: {percentiles[index]:.3f}\n"
     )
+stat_string += f"Mean time per trial in ms: {durations.mean():.3f}\n"
 print(stat_string)
 
 
